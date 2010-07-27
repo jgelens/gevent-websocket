@@ -1,0 +1,4 @@
+syntax: glob
+
+.pyc
+tests/testresults.sqlite3

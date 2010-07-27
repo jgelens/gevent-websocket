@@ -1,0 +1,5 @@
+recursive-include test *
+recursive-include geventwebsocket *
+include LICENSE
+include README.rst
+include MANIFEST.in

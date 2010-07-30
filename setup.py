@@ -7,9 +7,9 @@ setup(
     long_description=open("README.rst").read(),
     author="Jeffrey Gelens",
     author_email="jeffrey@noppo.org",
-    url="",
+    url="http://www.bitbucket.org/Jeffrey/gevent-websocket",
     install_requires=("gevent", "greenlet"),
-    packages=find_packages(exclude=["example","test"]),
+    packages=find_packages(exclude=["examples","tests"]),
     classifiers=[
         "Development Status :: 3 - Alpha",
         "License :: OSI Approved :: BSD License",

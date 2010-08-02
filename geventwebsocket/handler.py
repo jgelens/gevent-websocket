@@ -7,7 +7,6 @@ from hashlib import md5
 from gevent.pywsgi import WSGIHandler
 from geventwebsocket import WebSocket
 
-
 class WebSocketHandler(WSGIHandler):
     def handle_one_response(self):
         self.time_start = time.time()

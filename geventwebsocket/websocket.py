@@ -66,7 +66,14 @@ class WebSocket(object):
                 return None
 
             frame_str = self.rfile.read(1)
-            frame_type = ord(frame_str)
+            if not frame_str:
+                # Connection lost?
+                self.websocket_closed = True
+                continue
+            else:
+                frame_type = ord(frame_str)
+
+
             if (frame_type & 0x80) == 0x00: # most significant byte is not set
 
                 if frame_type == 0x00:

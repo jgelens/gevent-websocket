@@ -1,17 +1,15 @@
-=================
-_gevent-websocket
-=================
+================
+gevent-websocket
+================
 
-_gevent-websocket is a websocket library for the Gevent networking library.
-
-_gevent-websocket is written and maintained by `Jeffrey Gelens`_ and licensed
-under the BSD license.
+`gevent-websocket`_ is a websocket library for the Gevent networking library
+written written and maintained by `Jeffrey Gelens`_ It is licensed under the BSD license.
 
 Installation
 ------------------------
 
 Install Python 2.4 or newer and gevent and its dependencies. The latest release
-can be download from _PyPi or by cloning the _repository.
+can be download from PyPi_ or by cloning the repository_.
 
 Usage
 -----
@@ -23,7 +21,8 @@ At the moment gevent-websocket has one handler based on the Pywsgi gevent
 server. Set the `handler_class` when creating a pywsgi server instance to make
 use of the Websocket functionality:
 
-..
+.. sourcecode:: python
+
     from gevent import pywsgi
     from geventwebsocket.handler import WebSocketHandler
 
@@ -33,7 +32,8 @@ use of the Websocket functionality:
 
 Afterwards write a WSGI application with a 3rd parameter, namely a websocket instance:
 
-..
+.. sourcecode:: python
+
     def websocket_app(environ, start_response, ws):
         if ws.path == '/echo':
             message = ws.wait()
@@ -46,7 +46,8 @@ Using Gunicorn it is even more easy to start a server. Only the
 websocket_app from the previous example is required to start the server.
 Dtart Gunicorn using the following command and worker class:
 
-..
+.. sourcecode:: python
+
     gunicorn -k "geventwebsocket.gunicorn.workers.GeventWebSocketWorker" gunicorn_websocket:websocket_app
 
 .. _gevent-websocket: http://www.bitbucket.org/Jeffrey/gevent-websocket/

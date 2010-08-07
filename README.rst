@@ -34,8 +34,9 @@ Afterwards write a WSGI application with a 3rd parameter, namely a websocket ins
 
 ::
 
-    def websocket_app(environ, start_response, ws):
-        if ws.path == '/echo':
+    def websocket_app(environ, start_response):
+        if environ["PATH_INFO"] == '/echo':
+            ws = environ["wsgi.websocket"]
             message = ws.wait()
             ws.send(message)
 

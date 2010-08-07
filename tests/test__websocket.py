@@ -227,8 +227,14 @@ class TestCase(greentest.TestCase):
 class TestWebSocket(TestCase):
     message = "\x00Hello world\xff"
 
-    def application(self, environ, start_response, ws):
+    def application(self, environ, start_response):
         if environ['PATH_INFO'] == "/echo":
+            try:
+                ws = environ['wsgi.websocket']
+            except KeyError:
+                start_response("400 Bad Request", [])
+                return []
+
             while True:
                 message = ws.wait()
                 if message is None:
@@ -268,8 +274,8 @@ class TestWebSocket(TestCase):
 
     def test_badrequest(self):
         fd = self.connect().makefile(bufsize=1)
-        fd.write('GET / HTTP/1.1\r\nHost: localhost\r\n\r\n')
-        read_http(fd, code=400, reason='Bad Request', body='Websocket connection expected')
+        fd.write('GET /echo HTTP/1.1\r\nHost: localhost\r\n\r\n')
+        read_http(fd, code=400, reason='Bad Request')
         fd.close()
 
     def test_oldprotocol_version(self):

@@ -1,3 +1,7 @@
+# This class implements the Websocket protocol draft version as of May 23, 2010
+# The version as of August 6, 2010 will be implementend once Firefox or
+# Webkit-trunk support this version.
+
 class WebSocket(object):
     def __init__(self, rfile, wfile, sock, environ):
         self.rfile = rfile

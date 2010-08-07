@@ -8,64 +8,58 @@ from gevent.pywsgi import WSGIHandler
 from geventwebsocket import WebSocket
 
 class WebSocketHandler(WSGIHandler):
-    def handle_one_response(self):
-        self.time_start = time.time()
-        self.status = None
-        self.response_length = 0
+    def __init__(self, *args, **kwargs):
+        self.websocket_connection = False
+        super(WebSocketHandler, self).__init__(*args, **kwargs)
 
+    def handle_one_response(self):
+        # In case the client doesn't want to initialize a WebSocket connection
+        # we will proceed with the default PyWSGI functionality.
         if self.environ.get("HTTP_CONNECTION") != "Upgrade" or \
            self.environ.get("HTTP_UPGRADE") != "WebSocket" or \
            not self.environ.get("HTTP_ORIGIN"):
-            message = "Websocket connection expected"
-            headers = [("Content-Length", str(len(message))),]
-            self.start_response("HTTP/1.1 400 Bad Request", headers, message)
-            self.close_connection = True
-            return
+            return super(WebSocketHandler, self).handle_one_response()
+        else:
+            self.websocket_connection = True
 
-        ws = WebSocket(self.rfile, self.wfile, self.socket, self.environ)
+        self.websocket = WebSocket(self.rfile, self.wfile, self.socket, self.environ)
+        self.environ['wsgi.websocket'] = self.websocket
         challenge = self._get_challenge()
 
         headers = [
             ("Upgrade", "WebSocket"),
             ("Connection", "Upgrade"),
-            ("Sec-WebSocket-Origin", ws.origin),
-            ("Sec-WebSocket-Protocol", ws.protocol),
-            ("Sec-WebSocket-Location", "ws://" + self.environ.get('HTTP_HOST') + ws.path),
+            ("Sec-WebSocket-Origin", self.websocket.origin),
+            ("Sec-WebSocket-Protocol", self.websocket.protocol),
+            ("Sec-WebSocket-Location", "ws://" + self.environ.get('HTTP_HOST') + self.websocket.path),
         ]
 
-        self.start_response(
-            "HTTP/1.1 101 Web Socket Protocol Handshake", headers, challenge
-        )
+        self.start_response("101 Web Socket Protocol Handshake", headers)
+        self.write([challenge])
 
-        try:
-            self.application(self.environ, self.start_response, ws)
-        except Exception:
-            traceback.print_exc()
-            sys.exc_clear()
-            try:
-                args = (getattr(self, 'server', ''),
-                        getattr(self, 'requestline', ''),
-                        getattr(self, 'client_address', ''),
-                        getattr(self, 'application', ''))
-                msg = '%s: Failed to handle request:\n  request = %s from %s\n  application = %s\n\n' % args
-                sys.stderr.write(msg)
-            except Exception:
-                sys.exc_clear()
-        finally:
-            self.wsgi_input._discard()
-            self.time_finish = time.time()
-            self.log_request()
+        return self.application(self.environ, self.start_response)
 
-    def start_response(self, status, headers, body=None):
-        towrite = [status]
-        for header in headers:
-            towrite.append(": ".join(header))
+    def write(self, data):
+        if self.websocket_connection:
+            self.wfile.writelines(data)
+        else:
+            super(WebSocketHandler, self).write(data)
 
-        if body is not None:
-            towrite.append("")
-            towrite.append(body)
+    def start_response(self, status, headers, exc_info=None):
+        if self.websocket_connection:
+            self.status = status
 
-        self.wfile.write("\r\n".join(towrite))
+            towrite = []
+            towrite.append('%s %s\r\n' % (self.request_version, self.status))
+
+            for header in headers:
+                towrite.append("%s: %s\r\n" % header)
+
+            towrite.append("\r\n")
+            self.wfile.writelines(towrite)
+            self.headers_sent = True
+        else:
+            super(WebSocketHandler, self).start_response(status, headers, exc_info)
 
     def _get_key_value(self, key_value):
         key_number = int(re.sub("\\D", "", key_value))
@@ -83,7 +77,8 @@ class WebSocketHandler(WSGIHandler):
         if not (key1 and key2):
             message = "Client using old protocol implementation"
             headers = [("Content-Length", str(len(message))),]
-            self.start_response("HTTP/1.1 400 Bad Request", headers, message)
+            self.start_response("400 Bad Request", headers)
+            self.write([message])
             self.close_connection = True
             return
 

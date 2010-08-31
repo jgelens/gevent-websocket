@@ -284,13 +284,31 @@ class TestWebSocket(TestCase):
         "GET /echo HTTP/1.1\r\n" \
         "Host: localhost\r\n" \
         "Connection: Upgrade\r\n" \
-        "WebSocket-Protocol: sample\r\n" \
+        "Sec-WebSocket-Protocol: test\r\n" \
         "Upgrade: WebSocket\r\n" \
-        "Origin: http://example.com\r\n\r\n" \
+        "Sec-WebSocket-Key1: 4 @1  46546xW%0l 1 5\r\n" \
+        "Origin: http://localhost\r\n\r\n" \
         "^n:ds[4U"
 
         fd.write(headers)
-        read_http(fd, code=400, reason='Bad Request', body='Client using old protocol implementation')
+        read_http(fd, code=400, reason='Bad Request',
+            body='Client using old/invalid protocol implementation')
+
+        fd.close()
+
+    def test_protocol_version75(self):
+        fd = self.connect().makefile(bufsize=1)
+        headers = "" \
+        "GET /echo HTTP/1.1\r\n" \
+        "Host: localhost\r\n" \
+        "Connection: Upgrade\r\n" \
+        "WebSocket-Protocol: sample\r\n" \
+        "Upgrade: WebSocket\r\n" \
+        "Origin: http://example.com\r\n\r\n"
+
+        fd.write(headers)
+        fd.write(self.message)
+        response = read_http(fd, code=101, body=self.message, reason="Web Socket Protocol Handshake")
 
         fd.close()
 

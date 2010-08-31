@@ -24,18 +24,36 @@ class WebSocketHandler(WSGIHandler):
 
         self.websocket = WebSocket(self.rfile, self.wfile, self.socket, self.environ)
         self.environ['wsgi.websocket'] = self.websocket
-        challenge = self._get_challenge()
 
-        headers = [
-            ("Upgrade", "WebSocket"),
-            ("Connection", "Upgrade"),
-            ("Sec-WebSocket-Origin", self.websocket.origin),
-            ("Sec-WebSocket-Protocol", self.websocket.protocol),
-            ("Sec-WebSocket-Location", "ws://" + self.environ.get('HTTP_HOST') + self.websocket.path),
-        ]
+        # Detect the Websocket protocol
+        if "HTTP_SEC_WEBSOCKET_KEY1" in self.environ:
+            version = 76
+        else:
+            version = 75
 
-        self.start_response("101 Web Socket Protocol Handshake", headers)
-        self.write([challenge])
+        if version == 75:
+            headers = [
+                ("Upgrade", "WebSocket"),
+                ("Connection", "Upgrade"),
+                ("WebSocket-Origin", self.websocket.origin),
+                ("WebSocket-Protocol", self.websocket.protocol),
+                ("WebSocket-Location", "ws://" + self.environ.get('HTTP_HOST') + self.websocket.path),
+            ]
+            self.start_response("101 Web Socket Protocol Handshake", headers)
+        elif version == 76:
+            challenge = self._get_challenge()
+            headers = [
+                ("Upgrade", "WebSocket"),
+                ("Connection", "Upgrade"),
+                ("Sec-WebSocket-Origin", self.websocket.origin),
+                ("Sec-WebSocket-Protocol", self.websocket.protocol),
+                ("Sec-WebSocket-Location", "ws://" + self.environ.get('HTTP_HOST') + self.websocket.path),
+            ]
+
+            self.start_response("101 Web Socket Protocol Handshake", headers)
+            self.write([challenge])
+        else:
+            raise Exception("Version not supported")
 
         return self.application(self.environ, self.start_response)
 
@@ -74,8 +92,9 @@ class WebSocketHandler(WSGIHandler):
     def _get_challenge(self):
         key1 = self.environ.get('HTTP_SEC_WEBSOCKET_KEY1')
         key2 = self.environ.get('HTTP_SEC_WEBSOCKET_KEY2')
+
         if not (key1 and key2):
-            message = "Client using old protocol implementation"
+            message = "Client using old/invalid protocol implementation"
             headers = [("Content-Length", str(len(message))),]
             self.start_response("400 Bad Request", headers)
             self.write([message])

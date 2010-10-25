@@ -12,7 +12,7 @@ class WebSocketHandler(WSGIHandler):
         self.websocket_connection = False
         super(WebSocketHandler, self).__init__(*args, **kwargs)
 
-    def handle_one_response(self):
+    def handle_one_response(self, call_wsgi_app=True):
         # In case the client doesn't want to initialize a WebSocket connection
         # we will proceed with the default PyWSGI functionality.
         if self.environ.get("HTTP_CONNECTION") != "Upgrade" or \
@@ -55,7 +55,10 @@ class WebSocketHandler(WSGIHandler):
         else:
             raise Exception("Version not supported")
 
-        return self.application(self.environ, self.start_response)
+        if call_wsgi_app:
+            return self.application(self.environ, self.start_response)
+        else:
+            return
 
     def write(self, data):
         if self.websocket_connection:
@@ -113,3 +116,9 @@ class WebSocketHandler(WSGIHandler):
         challenge += key3
 
         return md5(challenge).digest()
+
+    def wait(self):
+        return self.websocket.wait()
+
+    def send(self, message):
+        return self.websocket.send(message)

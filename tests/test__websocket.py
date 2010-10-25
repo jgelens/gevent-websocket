@@ -154,8 +154,8 @@ class Response(object):
             elif CONTENT_LENGTH in headers:
                 num = int(headers[CONTENT_LENGTH])
                 self.body = fd.read(num)
-            else:
-                self.body = fd.read(16)
+            #else:
+            #    self.body = fd.read(16)
         except:
             print 'Response.read failed to read the body:\n%s' % self
             raise
@@ -240,7 +240,7 @@ class TestWebSocket(TestCase):
                 if message is None:
                     break
                 ws.send(message)
-                ws.close_connection()
+
             return []
 
     def test_basic(self):
@@ -257,18 +257,52 @@ class TestWebSocket(TestCase):
         "^n:ds[4U"
 
         fd.write(headers)
-        fd.write(self.message)
 
-        response = read_http(fd, code=101, body="8jKS'y:G*Co,Wxa-", reason="Web Socket Protocol Handshake")
+        response = read_http(fd, code=101, reason="Web Socket Protocol Handshake")
         response.assertHeader("Upgrade", "WebSocket")
         response.assertHeader("Connection", "Upgrade")
         response.assertHeader("Sec-WebSocket-Origin", "http://localhost")
         response.assertHeader("Sec-WebSocket-Location", "ws://localhost/echo")
         response.assertHeader("Sec-WebSocket-Protocol", "test")
+        assert fd.read(16) == "8jKS'y:G*Co,Wxa-"
 
-        message = fd.read()
+        fd.write(self.message)
+        message = fd.read(len(self.message))
         assert message == self.message, \
                'Unexpected message: %r (expected %r)\n%s' % (message, self.message, self)
+
+        fd.close()
+
+    def test_10000_messages(self):
+        fd = self.connect().makefile(bufsize=1)
+        headers = "" \
+        "GET /echo HTTP/1.1\r\n" \
+        "Host: localhost\r\n" \
+        "Connection: Upgrade\r\n" \
+        "Sec-WebSocket-Key2: 12998 5 Y3 1  .P00\r\n" \
+        "Sec-WebSocket-Protocol: test\r\n" \
+        "Upgrade: WebSocket\r\n" \
+        "Sec-WebSocket-Key1: 4 @1  46546xW%0l 1 5\r\n" \
+        "Origin: http://localhost\r\n\r\n" \
+        "^n:ds[4U"
+
+        fd.write(headers)
+
+        response = read_http(fd, code=101, reason="Web Socket Protocol Handshake")
+        response.assertHeader("Upgrade", "WebSocket")
+        response.assertHeader("Connection", "Upgrade")
+        response.assertHeader("Sec-WebSocket-Origin", "http://localhost")
+        response.assertHeader("Sec-WebSocket-Location", "ws://localhost/echo")
+        response.assertHeader("Sec-WebSocket-Protocol", "test")
+        assert fd.read(16) == "8jKS'y:G*Co,Wxa-"
+
+        for i in xrange(10000):
+            fd.write(self.message)
+            message = fd.read(len(self.message))
+
+            assert message == self.message, \
+                   'Unexpected message: %r (expected %r)\n%s' % (message, self.message, self)
+
 
         fd.close()
 
@@ -307,8 +341,12 @@ class TestWebSocket(TestCase):
         "Origin: http://example.com\r\n\r\n"
 
         fd.write(headers)
+        response = read_http(fd, code=101, reason="Web Socket Protocol Handshake")
+
         fd.write(self.message)
-        response = read_http(fd, code=101, body=self.message, reason="Web Socket Protocol Handshake")
+        message = fd.read(len(self.message))
+        assert message == self.message, \
+               'Unexpected message: %r (expected %r)\n%s' % (message, self.message, self)
 
         fd.close()
 

@@ -3,9 +3,8 @@
 # Webkit-trunk support this version.
 
 class WebSocket(object):
-    def __init__(self, rfile, wfile, sock, environ):
+    def __init__(self, sock, rfile, environ):
         self.rfile = rfile
-        self.wfile = wfile
         self.socket = sock
         self.origin = environ.get('HTTP_ORIGIN')
         self.protocol = environ.get('HTTP_SEC_WEBSOCKET_PROTOCOL', 'unknown')
@@ -23,7 +22,7 @@ class WebSocket(object):
         else:
             raise Exception("Invalid message encoding")
 
-        self.wfile.write("\x00" + message + "\xFF")
+        self.socket.sendall("\x00" + message + "\xFF")
 
     def close_connection(self):
         if not self.websocket_closed:

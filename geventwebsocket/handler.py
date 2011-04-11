@@ -65,7 +65,7 @@ class WebSocketHandler(WSGIHandler):
             ]
 
             self.start_response("101 Web Socket Protocol Handshake", headers)
-            self.write([challenge])
+            self.write(challenge)
         else:
             raise Exception("Version not supported")
 
@@ -91,7 +91,7 @@ class WebSocketHandler(WSGIHandler):
 
     def write(self, data):
         if self.websocket_connection:
-            self.wfile.writelines(data)
+            self.socket.sendall(data)
         else:
             super(WebSocketHandler, self).write(data)
 
@@ -106,7 +106,8 @@ class WebSocketHandler(WSGIHandler):
                 towrite.append("%s: %s\r\n" % header)
 
             towrite.append("\r\n")
-            self.wfile.writelines(towrite)
+            msg = ''.join(towrite)
+            self.socket.sendall(msg)
             self.headers_sent = True
         else:
             super(WebSocketHandler, self).start_response(status, headers, exc_info)
@@ -129,7 +130,7 @@ class WebSocketHandler(WSGIHandler):
             message = "Client using old/invalid protocol implementation"
             headers = [("Content-Length", str(len(message))),]
             self.start_response("400 Bad Request", headers)
-            self.write([message])
+            self.write(message)
             self.close_connection = True
             return
 

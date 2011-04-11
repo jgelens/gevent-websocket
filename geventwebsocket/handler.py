@@ -36,7 +36,7 @@ class WebSocketHandler(WSGIHandler):
         else:
             self.websocket_connection = True
 
-        self.websocket = WebSocket(self.rfile, self.wfile, self.socket, self.environ)
+        self.websocket = WebSocket(self.socket, self.rfile, self.environ)
         self.environ['wsgi.websocket'] = self.websocket
 
         # Detect the Websocket protocol

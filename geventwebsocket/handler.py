@@ -1,15 +1,28 @@
 import re
 import struct
-import time
-import traceback
-import sys
 from hashlib import md5
+
 from gevent.pywsgi import WSGIHandler
 from geventwebsocket import WebSocket
 
+
+class HandShakeError(ValueError):
+    """ Hand shake challenge can't be parsed """
+    pass
+
+
 class WebSocketHandler(WSGIHandler):
+    """ Automatically upgrades the connection to websockets. """
     def __init__(self, *args, **kwargs):
         self.websocket_connection = False
+        self.allowed_paths = []
+
+        for expression in kwargs.pop('allowed_paths', []):
+            if isinstance(expression, basestring):
+                self.allowed_paths.append(re.compile(expression))
+            else:
+                self.allowed_paths.append(expression)
+
         super(WebSocketHandler, self).__init__(*args, **kwargs)
 
     def handle_one_response(self, call_wsgi_app=True):
@@ -17,7 +30,8 @@ class WebSocketHandler(WSGIHandler):
         # we will proceed with the default PyWSGI functionality.
         if self.environ.get("HTTP_CONNECTION") != "Upgrade" or \
            self.environ.get("HTTP_UPGRADE") != "WebSocket" or \
-           not self.environ.get("HTTP_ORIGIN"):
+           not self.environ.get("HTTP_ORIGIN") or \
+           not self.accept_upgrade():
             return super(WebSocketHandler, self).handle_one_response()
         else:
             self.websocket_connection = True
@@ -59,6 +73,21 @@ class WebSocketHandler(WSGIHandler):
             return self.application(self.environ, self.start_response)
         else:
             return
+
+    def accept_upgrade(self):
+        """
+        Returns True if request is allowed to be upgraded.
+        If self.allowed_paths is non-empty, self.environ['PATH_INFO'] will
+        be matched against each of the regular expressions.
+        """
+
+        if self.allowed_paths:
+            path_info = self.environ.get('PATH_INFO', '')
+
+            for regexps in self.allowed_paths:
+                return regexps.match(path_info)
+        else:
+            return True
 
     def write(self, data):
         if self.websocket_connection:

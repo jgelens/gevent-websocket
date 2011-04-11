@@ -1,3 +1,5 @@
+from gevent.coros import Semaphore
+
 # This class implements the Websocket protocol draft version as of May 23, 2010
 # The version as of August 6, 2010 will be implementend once Firefox or
 # Webkit-trunk support this version.
@@ -9,12 +11,9 @@ class WebSocket(object):
         self.origin = environ.get('HTTP_ORIGIN')
         self.protocol = environ.get('HTTP_SEC_WEBSOCKET_PROTOCOL', 'unknown')
         self.path = environ.get('PATH_INFO')
-        self.websocket_closed = False
+        self._writelock = Semaphore(1)
 
     def send(self, message):
-        if self.websocket_closed:
-            raise Exception("Connection was terminated")
-
         if isinstance(message, unicode):
             message = message.encode('utf-8')
         elif isinstance(message, str):
@@ -22,15 +21,23 @@ class WebSocket(object):
         else:
             raise Exception("Invalid message encoding")
 
-        self.socket.sendall("\x00" + message + "\xFF")
+        with self._writelock:
+            self.socket.sendall("\x00" + message + "\xFF")
 
-    def close_connection(self):
-        if not self.websocket_closed:
-            self.websocket_closed = True
-            self.socket.shutdown(True)
-            self.socket.close()
-        else:
-            return
+    def detach(self):
+        self.socket = None
+        self.rfile = None
+        self.handler = None
+
+    def close(self):
+        # TODO implement graceful close with 0xFF frame
+        if self.socket is not None:
+            try:
+                self.socket.close()
+            except Exception:
+                pass
+            self.detach()
+
 
     def _message_length(self):
         # TODO: buildin security agains lengths greater than 2**31 or 2**32
@@ -63,36 +70,33 @@ class WebSocket(object):
 
         return ''.join(bytes)
 
-    def wait(self):
-        while True:
-            if self.websocket_closed:
-                return None
-
+    def receive(self):
+        while self.socket is not None:
             frame_str = self.rfile.read(1)
             if not frame_str:
                 # Connection lost?
-                self.websocket_closed = True
-                continue
+                self.close()
+                break
             else:
                 frame_type = ord(frame_str)
 
 
             if (frame_type & 0x80) == 0x00: # most significant byte is not set
-
                 if frame_type == 0x00:
                     bytes = self._read_until()
                     return bytes.decode("utf-8", "replace")
                 else:
-                    self.websocket_closed = True
-
+                    self.close()
             elif (frame_type & 0x80) == 0x80: # most significant byte is set
                 # Read binary data (forward-compatibility)
                 if frame_type != 0xff:
-                    self.websocket_closed = True
+                    self.close()
+                    break
                 else:
                     length = self._message_length()
                     if length == 0:
-                        self.websocket_closed = True
+                        self.close()
+                        break
                     else:
                         self.rfile.read(length) # discard the bytes
             else:

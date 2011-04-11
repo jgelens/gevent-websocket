@@ -1,20 +1,27 @@
 import re
 import struct
 from hashlib import md5
+from socket import error
 
 from gevent.pywsgi import WSGIHandler
 from geventwebsocket import WebSocket
 
 
-class HandShakeError(ValueError):
-    """ Hand shake challenge can't be parsed """
+class WebSocketError(error):
     pass
+
+
+class BadRequest(WebSocketError):
+    """
+    This error will be raised by meth:`do_handshake` when encountering an invalid request.
+    If left unhandled, it will cause :class:`WebSocketHandler` to log the error and to issue 400 reply.
+    It will also be raised by :meth:`connect` if remote server has replied with 4xx error.
+    """
 
 
 class WebSocketHandler(WSGIHandler):
     """ Automatically upgrades the connection to websockets. """
     def __init__(self, *args, **kwargs):
-        self.websocket_connection = False
         self.allowed_paths = []
 
         for expression in kwargs.pop('allowed_paths', []):
@@ -25,7 +32,14 @@ class WebSocketHandler(WSGIHandler):
 
         super(WebSocketHandler, self).__init__(*args, **kwargs)
 
-    def handle_one_response(self, call_wsgi_app=True):
+    def run_application(self):
+        if self.websocket:
+            return self.application(self.environ, self.start_response)
+        else:
+            return super(WebSocketHandler, self).run_application()
+
+    def handle_one_response(self):
+        # TODO: refactor to run under run_application
         # In case the client doesn't want to initialize a WebSocket connection
         # we will proceed with the default PyWSGI functionality.
         if self.environ.get("HTTP_CONNECTION") != "Upgrade" or \
@@ -33,11 +47,14 @@ class WebSocketHandler(WSGIHandler):
            not self.environ.get("HTTP_ORIGIN") or \
            not self.accept_upgrade():
             return super(WebSocketHandler, self).handle_one_response()
-        else:
-            self.websocket_connection = True
 
         self.websocket = WebSocket(self.socket, self.rfile, self.environ)
         self.environ['wsgi.websocket'] = self.websocket
+
+        headers = [
+            ("Upgrade", "WebSocket"),
+            ("Connection", "Upgrade"),
+        ]
 
         # Detect the Websocket protocol
         if "HTTP_SEC_WEBSOCKET_KEY1" in self.environ:
@@ -46,33 +63,26 @@ class WebSocketHandler(WSGIHandler):
             version = 75
 
         if version == 75:
-            headers = [
-                ("Upgrade", "WebSocket"),
-                ("Connection", "Upgrade"),
+            headers.extend([
                 ("WebSocket-Origin", self.websocket.origin),
                 ("WebSocket-Protocol", self.websocket.protocol),
                 ("WebSocket-Location", "ws://" + self.environ.get('HTTP_HOST') + self.websocket.path),
-            ]
+            ])
             self.start_response("101 Web Socket Protocol Handshake", headers)
         elif version == 76:
             challenge = self._get_challenge()
-            headers = [
-                ("Upgrade", "WebSocket"),
-                ("Connection", "Upgrade"),
+            headers.extend([
                 ("Sec-WebSocket-Origin", self.websocket.origin),
                 ("Sec-WebSocket-Protocol", self.websocket.protocol),
                 ("Sec-WebSocket-Location", "ws://" + self.environ.get('HTTP_HOST') + self.websocket.path),
-            ]
+            ])
 
             self.start_response("101 Web Socket Protocol Handshake", headers)
-            self.write([challenge])
+            self.write(challenge)
         else:
-            raise Exception("Version not supported")
+            raise Exception("WebSocket version not supported")
 
-        if call_wsgi_app:
-            return self.application(self.environ, self.start_response)
-        else:
-            return
+        return self.run_application()
 
     def accept_upgrade(self):
         """
@@ -90,8 +100,8 @@ class WebSocketHandler(WSGIHandler):
             return True
 
     def write(self, data):
-        if self.websocket_connection:
-            self.wfile.writelines(data)
+        if self.websocket:
+            self.socket.sendall(data)
         else:
             super(WebSocketHandler, self).write(data)
 
@@ -106,7 +116,7 @@ class WebSocketHandler(WSGIHandler):
                 towrite.append("%s: %s\r\n" % header)
 
             towrite.append("\r\n")
-            self.wfile.writelines(towrite)
+            self.socket.sendall(towrite)
             self.headers_sent = True
         else:
             super(WebSocketHandler, self).start_response(status, headers, exc_info)
@@ -116,7 +126,7 @@ class WebSocketHandler(WSGIHandler):
         spaces = re.subn(" ", "", key_value)[1]
 
         if key_number % spaces != 0:
-            raise HandShakeError("key_number %d is not an intergral multiple of"
+            raise WebSocketHandler("key_number %d is not an intergral multiple of"
                                  " spaces %d" % (key_number, spaces))
 
         return key_number / spaces
@@ -125,13 +135,10 @@ class WebSocketHandler(WSGIHandler):
         key1 = self.environ.get('HTTP_SEC_WEBSOCKET_KEY1')
         key2 = self.environ.get('HTTP_SEC_WEBSOCKET_KEY2')
 
-        if not (key1 and key2):
-            message = "Client using old/invalid protocol implementation"
-            headers = [("Content-Length", str(len(message))),]
-            self.start_response("400 Bad Request", headers)
-            self.write([message])
-            self.close_connection = True
-            return
+        if not key1:
+            raise BadRequest("SEC-WEBSOCKET-KEY1 header is missing")
+        if not key2:
+            raise BadRequest("SEC-WEBSOCKET-KEY2 header is missing")
 
         part1 = self._get_key_value(self.environ['HTTP_SEC_WEBSOCKET_KEY1'])
         part2 = self._get_key_value(self.environ['HTTP_SEC_WEBSOCKET_KEY2'])
@@ -139,12 +146,7 @@ class WebSocketHandler(WSGIHandler):
         # This request should have 8 bytes of data in the body
         key3 = self.rfile.read(8)
 
-        challenge = ""
-        challenge += struct.pack("!I", part1)
-        challenge += struct.pack("!I", part2)
-        challenge += key3
-
-        return md5(challenge).digest()
+        return md5(struct.pack("!II", part1, part2) + key3).digest()
 
     def wait(self):
         return self.websocket.wait()

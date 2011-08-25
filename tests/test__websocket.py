@@ -24,6 +24,7 @@
 from gevent import monkey
 monkey.patch_all(thread=False)
 
+import base64
 import sys
 import greentest
 import gevent
@@ -224,6 +225,7 @@ class TestCase(greentest.TestCase):
         return socket.create_connection(('127.0.0.1', self.port))
 
 
+"""
 class TestWebSocket(TestCase):
     message = "\x00Hello world\xff"
 
@@ -349,6 +351,187 @@ class TestWebSocket(TestCase):
                'Unexpected message: %r (expected %r)\n%s' % (message, self.message, self)
 
         fd.close()
+"""
+
+class TestWebSocketVersion7(TestCase):
+    def application(self, environ, start_response):
+        if environ['PATH_INFO'] == "/echo":
+            try:
+                ws = environ['wsgi.websocket']
+            except KeyError:
+                print ">>> In TestWebSocketVersion7.application!\n\n"
+                start_response("400 Bad Request", [])
+                return []
+
+            while True:
+                message = ws.wait()
+                if message is None:
+                    break
+                ws.send(message)
+
+            return []
+
+    def test_bad_handshake_method(self):
+        fd = self.connect().makefile(bufsize=1)
+        closed = False
+        headers = "" \
+        "POST /echo HTTP/1.1\r\n" \
+        "Host: localhost\r\n" \
+        "Upgrade: WebSocket\r\n" \
+        "Connection: Upgrade\r\n" \
+        "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n" \
+        "Sec-WebSocket-Origin: http://localhost\r\n" \
+        "Sec-WebSocket-Protocol: chat, superchat\r\n" \
+        "Sec-WebSocket-Version: 7\r\n" \
+        "\r\n"
+
+        fd.write(headers)
+        try:
+            response = read_http(fd, code=101, reason="Web Socket Protocol Handshake")
+        except ConnectionClosed:
+            closed = True
+
+        assert closed, "Failed to abort connection with bad method"
+        fd.close()
+
+    def test_bad_handshake_version(self):
+        fd = self.connect().makefile(bufsize=1)
+        closed = False
+        headers = "" \
+        "GET /echo HTTP/1.0\r\n" \
+        "Host: localhost\r\n" \
+        "Upgrade: WebSocket\r\n" \
+        "Connection: Upgrade\r\n" \
+        "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n" \
+        "Sec-WebSocket-Origin: http://localhost\r\n" \
+        "Sec-WebSocket-Protocol: chat, superchat\r\n" \
+        "Sec-WebSocket-Version: 7\r\n" \
+        "\r\n"
+
+        fd.write(headers)
+        try:
+            response = read_http(fd)
+        except ConnectionClosed:
+            closed = True
+
+        assert closed, "Failed to abort connection with bad version"
+        fd.close()
+
+    def test_bad_handshake_host(self):
+        fd = self.connect().makefile(bufsize=1)
+        closed = False
+        headers = "" \
+        "GET /echo HTTP/1.1\r\n" \
+        "Host: example.com\r\n" \
+        "Upgrade: WebSocket\r\n" \
+        "Connection: Upgrade\r\n" \
+        "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n" \
+        "Sec-WebSocket-Origin: http://localhost\r\n" \
+        "Sec-WebSocket-Protocol: chat, superchat\r\n" \
+        "Sec-WebSocket-Version: 7\r\n" \
+        "\r\n"
+
+        fd.write(headers)
+        try:
+            response = read_http(fd)
+        except ConnectionClosed:
+            closed = True
+
+        assert closed, "Failed to abort connection with bad Host"
+        fd.close()
+
+    def test_bad_handshake_no_key(self):
+        fd = self.connect().makefile(bufsize=1)
+        closed = False
+        headers = "" \
+        "GET /echo HTTP/1.1\r\n" \
+        "Host: localhost\r\n" \
+        "Upgrade: WebSocket\r\n" \
+        "Connection: Upgrade\r\n" \
+        "Sec-WebSocket-Origin: http://localhost\r\n" \
+        "Sec-WebSocket-Protocol: chat, superchat\r\n" \
+        "Sec-WebSocket-Version: 7\r\n" \
+        "\r\n"
+
+        fd.write(headers)
+        try:
+            response = read_http(fd)
+        except ConnectionClosed:
+            closed = True
+
+        assert closed, "Failed to abort connection with no Sec-WebSocket-Key"
+        fd.close()
+
+    def test_bad_handshake_short_key(self):
+        fd = self.connect().makefile(bufsize=1)
+        closed = False
+        headers = "" \
+        "GET /echo HTTP/1.1\r\n" \
+        "Host: localhost\r\n" \
+        "Upgrade: WebSocket\r\n" \
+        "Connection: Upgrade\r\n" \
+        "Sec-WebSocket-Key: " + base64.b64encode('too short') + "\r\n" \
+        "Sec-WebSocket-Origin: http://localhost\r\n" \
+        "Sec-WebSocket-Protocol: chat, superchat\r\n" \
+        "Sec-WebSocket-Version: 7\r\n" \
+        "\r\n"
+
+        fd.write(headers)
+        try:
+            response = read_http(fd)
+        except ConnectionClosed:
+            closed = True
+
+        assert closed, "Failed to abort connection with key that is too short"
+        fd.close()
+
+    def test_bad_handshake_long_key(self):
+        fd = self.connect().makefile(bufsize=1)
+        closed = False
+        headers = "" \
+        "GET /echo HTTP/1.1\r\n" \
+        "Host: localhost\r\n" \
+        "Upgrade: WebSocket\r\n" \
+        "Connection: Upgrade\r\n" \
+        "Sec-WebSocket-Key: " + base64.b64encode('too long. too long. too long') + "\r\n" \
+        "Sec-WebSocket-Origin: http://localhost\r\n" \
+        "Sec-WebSocket-Protocol: chat, superchat\r\n" \
+        "Sec-WebSocket-Version: 7\r\n" \
+        "\r\n"
+
+        fd.write(headers)
+        try:
+            response = read_http(fd)
+        except ConnectionClosed:
+            closed = True
+
+        assert closed, "Failed to abort connection with key that is too long"
+        fd.close()
+
+    """
+    def test_handshake(self):
+        fd = self.connect().makefile(bufsize=1)
+        headers = "" \
+            "GET /echo HTTP/1.1\r\n" \
+            "Host: localhost\r\n" \
+            "Upgrade: WebSocket\r\n" \
+            "Connection: Upgrade\r\n" \
+            "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n" \
+            "Sec-WebSocket-Origin: http://localhost\r\n" \
+            "Sec-WebSocket-Protocol: chat, superchat\r\n" \
+            "Sec-WebSocket-Version: 7\r\n" \
+            "\r\n"
+
+        fd.write(headers)
+        response = read_http(fd, code=101, reason="Web Socket Protocol Handshake")
+
+        fd.write(self.message)
+        message = fd.read(len(self.message))
+        assert message == self.message, \
+               'Unexpected message: %r (expected %r)\n%s' % (message, self.message, self)
+
+        fd.close()
+    """
 
 if __name__ == '__main__':
     greentest.main()

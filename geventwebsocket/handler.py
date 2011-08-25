@@ -1,3 +1,4 @@
+import base64
 import re
 import struct
 from hashlib import md5
@@ -26,6 +27,69 @@ class WebSocketHandler(WSGIHandler):
         super(WebSocketHandler, self).__init__(*args, **kwargs)
 
     def handle_one_response(self, call_wsgi_app=True):
+        if self.environ.get("HTTP_ORIGIN"):
+            self._handle_one_legacy_response()
+        elif self.environ.get("HTTP_SEC_WEBSOCKET_VERSION"):
+            version = int(self.environ.get("HTTP_SEC_WEBSOCKET_VERSION"))
+            if version is 7:
+                if not self._handle_one_version7_response():
+                    return
+            else:
+                return
+        else:
+            # not a valid websocket request
+            return super(WebSocketHandler, self).handle_one_response()
+
+        if call_wsgi_app:
+            return self.application(self.environ, self.start_response)
+        else:
+            return
+
+    def _close_connection(self, reason=None):
+        # based on gevent/pywsgi.py
+        # see http://pypi.python.org/pypi/gevent#downloads
+
+        if reason:
+            print "Closing the connection because %s!" % reason
+        if self.socket is not None:
+            try:
+                self.socket._sock.close()
+                self.socket.close()
+            except socket.error:
+                pass
+
+    def _handle_one_version7_response(self):
+        environ = self.environ
+
+        protocol, version = self.request_version.split("/")
+        # check client handshake for validity
+        if not environ.get("REQUEST_METHOD") == "GET":
+            # 5.2.1 (1)
+            self._close_connection()
+            return False
+        elif not protocol == "HTTP":
+            # 5.2.1 (1)
+            self._close_connection()
+            return False
+        elif float(version) < 1.1:
+            # 5.2.1 (1)
+            self._close_connection()
+            return False
+        elif not environ.get("HTTP_HOST") == environ.get("SERVER_NAME"):
+            # 5.2.1 (2)
+            self._close_connection()
+            return False
+        elif not environ.get("HTTP_SEC_WEBSOCKET_KEY"):
+            # 5.2.1 (3)
+            self._close_connection()
+            return False
+        elif len(base64.b64decode(environ.get("HTTP_SEC_WEBSOCKET_KEY"))) != 16:
+            # 5.2.1 (3)
+            self._close_connection()
+            return False
+        #TODO: provide a way to specify how to handle Sec-WebSocket-Origin if present
+
+    def _handle_one_legacy_response(self):
         # In case the client doesn't want to initialize a WebSocket connection
         # we will proceed with the default PyWSGI functionality.
         if self.environ.get("HTTP_CONNECTION") != "Upgrade" or \
@@ -68,11 +132,6 @@ class WebSocketHandler(WSGIHandler):
             self.write(challenge)
         else:
             raise Exception("Version not supported")
-
-        if call_wsgi_app:
-            return self.application(self.environ, self.start_response)
-        else:
-            return
 
     def accept_upgrade(self):
         """

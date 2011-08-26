@@ -1,10 +1,10 @@
 import base64
 import re
 import struct
-from hashlib import md5
+from hashlib import md5, sha1
 
 from gevent.pywsgi import WSGIHandler
-from geventwebsocket import WebSocket
+from geventwebsocket import WebSocket, WebSocketVersion7
 
 
 class HandShakeError(ValueError):
@@ -13,6 +13,8 @@ class HandShakeError(ValueError):
 
 
 class WebSocketHandler(WSGIHandler):
+    GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
+
     """ Automatically upgrades the connection to websockets. """
     def __init__(self, *args, **kwargs):
         self.websocket_connection = False
@@ -62,6 +64,8 @@ class WebSocketHandler(WSGIHandler):
         environ = self.environ
 
         protocol, version = self.request_version.split("/")
+        key = environ.get("HTTP_SEC_WEBSOCKET_KEY")
+
         # check client handshake for validity
         if not environ.get("REQUEST_METHOD") == "GET":
             # 5.2.1 (1)
@@ -79,15 +83,28 @@ class WebSocketHandler(WSGIHandler):
             # 5.2.1 (2)
             self._close_connection()
             return False
-        elif not environ.get("HTTP_SEC_WEBSOCKET_KEY"):
+        elif not key:
             # 5.2.1 (3)
             self._close_connection()
             return False
-        elif len(base64.b64decode(environ.get("HTTP_SEC_WEBSOCKET_KEY"))) != 16:
+        elif len(base64.b64decode(key)) != 16:
             # 5.2.1 (3)
             self._close_connection()
             return False
-        #TODO: provide a way to specify how to handle Sec-WebSocket-Origin if present
+
+        #TODO: compare Sec-WebSocket-Origin against self.allowed_paths
+
+        self.websocket_connection = True
+        self.websocket = WebSocketVersion7(self.socket, self.rfile, self.environ)
+        self.environ['wsgi.websocket'] = self.websocket
+
+        headers = [
+            ("Upgrade", "websocket"),
+            ("Connection", "Upgrade"),
+            ("Sec-WebSocket-Accept", base64.b64encode(sha1(key + self.GUID).digest())),
+        ]
+        self.start_response("101 Switching Protocols", headers)
+        return True
 
     def _handle_one_legacy_response(self):
         # In case the client doesn't want to initialize a WebSocket connection

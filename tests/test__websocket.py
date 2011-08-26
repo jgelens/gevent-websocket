@@ -225,7 +225,6 @@ class TestCase(greentest.TestCase):
         return socket.create_connection(('127.0.0.1', self.port))
 
 
-"""
 class TestWebSocket(TestCase):
     message = "\x00Hello world\xff"
 
@@ -351,7 +350,6 @@ class TestWebSocket(TestCase):
                'Unexpected message: %r (expected %r)\n%s' % (message, self.message, self)
 
         fd.close()
-"""
 
 class TestWebSocketVersion7(TestCase):
     def application(self, environ, start_response):
@@ -359,7 +357,6 @@ class TestWebSocketVersion7(TestCase):
             try:
                 ws = environ['wsgi.websocket']
             except KeyError:
-                print ">>> In TestWebSocketVersion7.application!\n\n"
                 start_response("400 Bad Request", [])
                 return []
 
@@ -507,6 +504,28 @@ class TestWebSocketVersion7(TestCase):
 
         assert closed, "Failed to abort connection with key that is too long"
         fd.close()
+
+    def test_good_handshake(self):
+        fd = self.connect().makefile(bufsize=1)
+        headers = "" \
+            "GET /echo HTTP/1.1\r\n" \
+            "Host: localhost\r\n" \
+            "Upgrade: WebSocket\r\n" \
+            "Connection: Upgrade\r\n" \
+            "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n" \
+            "Sec-WebSocket-Origin: http://localhost\r\n" \
+            "Sec-WebSocket-Protocol: chat, superchat\r\n" \
+            "Sec-WebSocket-Version: 7\r\n" \
+            "\r\n"
+
+        fd.write(headers)
+        response = read_http(fd, code=101, reason="Switching Protocols")
+        response.assertHeader("Upgrade", "websocket")
+        response.assertHeader("Connection", "Upgrade")
+        response.assertHeader("Sec-WebSocket-Accept", "s3pPLMBiTxaQ9kYGzzhZRbK+xOo=")
+
+        fd.close();
+
 
     """
     def test_handshake(self):

@@ -97,3 +97,12 @@ class WebSocket(object):
                         self.rfile.read(length) # discard the bytes
             else:
                 raise IOError("Reveiced an invalid message")
+
+class WebSocketVersion7(WebSocket):
+    def __init__(self, sock, rfile, environ):
+        self.rfile = rfile
+        self.socket = sock
+        self.origin = environ.get('HTTP_SEC_WEBSOCKET_ORIGIN')
+        self.protocol = environ.get('HTTP_SEC_WEBSOCKET_PROTOCOL', 'unknown')
+        self.path = environ.get('PATH_INFO')
+        self.websocket_closed = False

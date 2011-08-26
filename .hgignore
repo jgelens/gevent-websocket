@@ -1,4 +1,6 @@
 syntax: glob
 
-.pyc
+*.pyc
+*.sw?
+gevent_websocket.egg-info/*
 tests/testresults.sqlite3

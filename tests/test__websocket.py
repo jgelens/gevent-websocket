@@ -24,12 +24,15 @@
 from gevent import monkey
 monkey.patch_all(thread=False)
 
+import binascii
 import base64
+import struct
 import sys
 import greentest
 import gevent
 from gevent import socket
 from geventwebsocket.handler import WebSocketHandler
+from geventwebsocket.websocket import WebSocketVersion7
 
 
 CONTENT_LENGTH = 'Content-Length'
@@ -352,19 +355,34 @@ class TestWebSocket(TestCase):
         fd.close()
 
 class TestWebSocketVersion7(TestCase):
+
+    GOOD_HEADERS = "" \
+        "GET /echo HTTP/1.1\r\n" \
+        "Host: localhost\r\n" \
+        "Upgrade: WebSocket\r\n" \
+        "Connection: Upgrade\r\n" \
+        "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n" \
+        "Sec-WebSocket-Origin: http://localhost\r\n" \
+        "Sec-WebSocket-Protocol: chat, superchat\r\n" \
+        "Sec-WebSocket-Version: 7\r\n" \
+        "\r\n"
+
     def application(self, environ, start_response):
         if environ['PATH_INFO'] == "/echo":
             try:
                 ws = environ['wsgi.websocket']
+                self.ws = ws
             except KeyError:
                 start_response("400 Bad Request", [])
                 return []
 
+            """
             while True:
                 message = ws.wait()
                 if message is None:
                     break
                 ws.send(message)
+            """
 
             return []
 
@@ -507,18 +525,8 @@ class TestWebSocketVersion7(TestCase):
 
     def test_good_handshake(self):
         fd = self.connect().makefile(bufsize=1)
-        headers = "" \
-            "GET /echo HTTP/1.1\r\n" \
-            "Host: localhost\r\n" \
-            "Upgrade: WebSocket\r\n" \
-            "Connection: Upgrade\r\n" \
-            "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n" \
-            "Sec-WebSocket-Origin: http://localhost\r\n" \
-            "Sec-WebSocket-Protocol: chat, superchat\r\n" \
-            "Sec-WebSocket-Version: 7\r\n" \
-            "\r\n"
 
-        fd.write(headers)
+        fd.write(self.GOOD_HEADERS)
         response = read_http(fd, code=101, reason="Switching Protocols")
         response.assertHeader("Upgrade", "websocket")
         response.assertHeader("Connection", "Upgrade")
@@ -526,31 +534,124 @@ class TestWebSocketVersion7(TestCase):
 
         fd.close();
 
-
-    """
-    def test_handshake(self):
+    def test_send_short_frame(self):
         fd = self.connect().makefile(bufsize=1)
-        headers = "" \
-            "GET /echo HTTP/1.1\r\n" \
-            "Host: localhost\r\n" \
-            "Upgrade: WebSocket\r\n" \
-            "Connection: Upgrade\r\n" \
-            "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n" \
-            "Sec-WebSocket-Origin: http://localhost\r\n" \
-            "Sec-WebSocket-Protocol: chat, superchat\r\n" \
-            "Sec-WebSocket-Version: 7\r\n" \
-            "\r\n"
 
-        fd.write(headers)
-        response = read_http(fd, code=101, reason="Web Socket Protocol Handshake")
+        fd.write(self.GOOD_HEADERS)
+        read_http(fd, code=101, reason="Switching Protocols")
 
-        fd.write(self.message)
-        message = fd.read(len(self.message))
-        assert message == self.message, \
-               'Unexpected message: %r (expected %r)\n%s' % (message, self.message, self)
+        msg = 'Hello, websocket'
+        self.ws.send(1, msg)
+
+        preamble = fd.read(2)
+        opcode, length = struct.unpack('!BB', preamble)
+
+        assert opcode & WebSocketVersion7.FIN, 'FIN must be set'
+        assert (opcode & WebSocketVersion7.OPCODE) == 1, 'Opcode must be 0x1'
+        assert (length & WebSocketVersion7.MASK) == 0, 'MASK must not be set'
+        assert length == len(msg), 'Wrong length %d, expected %d' % (length, len(msg))
+
+        rxd_msg = fd.read(length).decode('utf-8', 'replace')
+        assert rxd_msg == msg, 'Wrong message "%s"' % rxd_msg
 
         fd.close()
-    """
+
+    def test_send_medium_frame(self):
+        fd = self.connect().makefile(bufsize=1)
+
+        fd.write(self.GOOD_HEADERS)
+        read_http(fd, code=101, reason="Switching Protocols")
+
+        msg = 'Hello, websocket' * 8
+        self.ws.send(1, msg)
+
+        preamble = fd.read(4)
+        opcode, length_code, length = struct.unpack('!BBH', preamble)
+
+        assert opcode & WebSocketVersion7.FIN, 'FIN must be set'
+        assert (opcode & WebSocketVersion7.OPCODE) == 1, 'Opcode must be 0x1'
+        assert (length_code & WebSocketVersion7.MASK) == 0, 'MASK must not be set'
+        assert length_code == 126, 'The length code must be 126'
+        assert length == len(msg), 'Wrong length %d, expected %d' % (length, len(msg))
+
+        rxd_msg = fd.read(length).decode('utf-8', 'replace')
+        assert rxd_msg == msg, 'Wrong message "%s"' % rxd_msg
+
+        fd.close()
+
+    def test_send_long_frame(self):
+        fd = self.connect().makefile(bufsize=1)
+
+        fd.write(self.GOOD_HEADERS)
+        read_http(fd, code=101, reason="Switching Protocols")
+
+        msg = 'Hello, websocket' * 4097
+        self.ws.send(1, msg)
+
+        preamble = fd.read(10)
+        opcode, length_code, length = struct.unpack('!BBQ', preamble)
+
+        assert opcode & WebSocketVersion7.FIN, 'FIN must be set'
+        assert (opcode & WebSocketVersion7.OPCODE) == 1, 'Opcode must be 0x1'
+        assert (length_code & WebSocketVersion7.MASK) == 0, 'MASK must not be set'
+        assert length_code == 127, 'The length code must be 127'
+        assert length == len(msg), 'Wrong length %d, expected %d' % (length, len(msg))
+
+        rxd_msg = fd.read(length).decode('utf-8', 'replace')
+        assert rxd_msg == msg, 'Wrong message "%s"' % rxd_msg
+
+        fd.close()
+
+    def test_binary_frame(self):
+        fd = self.connect().makefile(bufsize=1)
+
+        fd.write(self.GOOD_HEADERS)
+        read_http(fd, code=101, reason="Switching Protocols")
+
+        msg = struct.pack('!BHB', 129, 23, 42)
+        self.ws.send(2, msg)
+
+        frame = fd.read(6)
+        opcode, length, first, second, third = struct.unpack('!BBBHB', frame)
+
+        assert opcode & WebSocketVersion7.FIN, 'FIN must be set'
+        assert (opcode & WebSocketVersion7.OPCODE) == 2, 'Opcode must be 0x2'
+        assert (length & WebSocketVersion7.MASK) == 0, 'MASK must not be set'
+        assert length == 4, 'Wrong length %d, expected 4' % length
+        assert first == 129, 'Expected first value to be 129, but got %d' % first
+        assert second == 23, 'Expected second value to be 23, but got %d' % second
+        assert third == 42, 'Expected third value to be 42, but got %d' % third
+
+        fd.close()
+
+    def test_wait_bad_framing_reserved_bits(self):
+        fd = self.connect().makefile(bufsize=1)
+
+        fd.write(self.GOOD_HEADERS)
+        read_http(fd, code=101, reason="Switching Protocols")
+
+        expected_msg = 'Reserved bits cannot be set'
+
+        fd.write(struct.pack("!BB", int("11000001", 2), int("10000000", 2)))
+
+        frame = self.ws.wait()
+        assert self.ws.websocket_closed, "Failed to close connection when sent a frame with RSV1 set"
+
+        preamble = fd.read(2)
+
+        opcode, length = struct.unpack('!BB', preamble)
+        assert opcode & WebSocketVersion7.FIN, 'FIN must be set'
+        assert (opcode & WebSocketVersion7.OPCODE) == 8, 'Opcode must be 0x8'
+        assert (length & WebSocketVersion7.MASK) == 0, 'MASK must not be set'
+
+        reason = fd.read(2)
+        reason = struct.unpack('!H', reason)[0]
+        assert reason == 1002, 'Expected reason to be 1002, but got %d' % reason
+
+        rxd_msg = fd.read(length - 2).decode('utf-8', 'replace')
+        assert rxd_msg == expected_msg, 'Wrong message "%s"' % rxd_msg
+
+        fd.close();
 
 if __name__ == '__main__':
     greentest.main()

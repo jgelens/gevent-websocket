@@ -2,6 +2,9 @@
 # The version as of August 6, 2010 will be implementend once Firefox or
 # Webkit-trunk support this version.
 
+import binascii
+import struct
+
 class WebSocket(object):
     def __init__(self, sock, rfile, environ):
         self.rfile = rfile
@@ -99,6 +102,24 @@ class WebSocket(object):
                 raise IOError("Reveiced an invalid message")
 
 class WebSocketVersion7(WebSocket):
+    FIN = int("10000000", 2)
+    RSV = int("01110000", 2)
+    OPCODE = int("00001111", 2)
+    MASK = int("10000000", 2)
+    PAYLOAD = int("01111111", 2)
+
+    OPCODE_TEXT = 0x1
+    OPCODE_BINARY = 0x2
+    OPCODE_CLOSE = 0x8
+    OPCODE_PING = 0x9
+    OPCODE_PONG = 0xA
+
+    REASON_NORMAL = 1000
+    REASON_GOING_AWAY = 1001
+
+    LEN_16 = 126
+    LEN_64 = 127
+
     def __init__(self, sock, rfile, environ):
         self.rfile = rfile
         self.socket = sock
@@ -106,3 +127,64 @@ class WebSocketVersion7(WebSocket):
         self.protocol = environ.get('HTTP_SEC_WEBSOCKET_PROTOCOL', 'unknown')
         self.path = environ.get('PATH_INFO')
         self.websocket_closed = False
+
+    def wait(self):
+        msg = ""
+        while True:
+            if self.websocket_closed:
+                return None
+
+            opcode, length = struct.unpack('!BB', self.rfile.read(2))
+
+            if self.RSV & opcode:
+                self.close(1002, 'Reserved bits cannot be set')
+                return None
+
+            is_final_frag = (self.FIN & opcode) != 0
+
+    def _encodeText(self, s):
+        if isinstance(s, unicode):
+            return s.encode('utf-8')
+        elif isinstance(s, str):
+            return unicode(s).encode('utf-8')
+        else:
+            raise Exception('Invalid encoding')
+
+    def send(self, opcode, message):
+        if self.websocket_closed:
+            raise Exception('Connection was terminated')
+
+        if opcode < self.OPCODE_TEXT or (opcode > self.OPCODE_BINARY and 
+                opcode < self.OPCODE_CLOSE) or opcode > self.OPCODE_PONG:
+            raise Exception('Invalid opcode %d' % opcode)
+
+        if opcode == self.OPCODE_TEXT:
+            message = self._encodeText(message)
+
+        length = len(message)
+
+        if opcode == self.OPCODE_TEXT:
+            message = struct.pack('!%ds' % length, message)
+
+        if length < 126:
+            preamble = struct.pack('!BB', self.FIN | opcode, length)
+        elif length < 2 ** 16:
+            preamble = struct.pack('!BBH', self.FIN | opcode, self.LEN_16, length)
+        else:
+            preamble = struct.pack('!BBQ', self.FIN | opcode, self.LEN_64, length)
+
+        self.socket.sendall(preamble + message)
+
+    def close(self, reason, message):
+        message = self._encodeText(message)
+        self.send(self.OPCODE_CLOSE, struct.pack('!H%ds' % len(message), reason, message))
+        self.websocket_closed = True
+
+        # based on gevent/pywsgi.py
+        # see http://pypi.python.org/pypi/gevent#downloads
+        if self.socket is not None:
+            try:
+                self.socket._sock.close()
+                self.socket.close()
+            except socket.error:
+                pass

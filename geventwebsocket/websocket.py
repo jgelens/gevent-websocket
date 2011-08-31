@@ -128,21 +128,58 @@ class WebSocketVersion7(WebSocket):
         self.path = environ.get('PATH_INFO')
         self.websocket_closed = False
 
+    def _read_from_socket(self, count):
+        return self.rfile.read(count)
+
     def wait(self):
-        msg = ""
+        msg = ''
         while True:
             if self.websocket_closed:
                 return None
 
-            opcode, length = struct.unpack('!BB', self.rfile.read(2))
+            opcode_octet, length_octet = struct.unpack('!BB', self._read_from_socket(2))
 
-            if self.RSV & opcode:
+            if self.RSV & opcode_octet:
                 self.close(1002, 'Reserved bits cannot be set')
                 return None
 
+            opcode = opcode_octet & self.OPCODE
+            if self._is_opcode_invalid(opcode):
+                self.close(1002, 'Invalid opcode %x' % opcode)
+                return None
+
+            if not self.MASK & length_octet:
+                self.close(1002, 'MASK must be set')
+                return None
+
+            length_code = length_octet & self.PAYLOAD
             is_final_frag = (self.FIN & opcode) != 0
 
-    def _encodeText(self, s):
+            if length_code < 126:
+                length = length_code
+            elif length_code == 126:
+                length = struct.unpack('!H', self._read_from_socket(2))[0]
+            elif length_code == 127:
+                length = struct.unpack('!Q', self._read_from_socket(8))[0]
+            else:
+                raise Exception('Calculated invalid length')
+
+            mask_octets = struct.unpack('!BBBB', self._read_from_socket(4))
+            masked_payload = self._read_from_socket(length)
+            payload = ''
+
+            # TODO: optimize me
+            j = 0
+            for c in masked_payload:
+                payload += chr(ord(c) ^ mask_octets[j])
+                j = (j + 1) % 4
+
+            if opcode == self.OPCODE_TEXT:
+                payload = payload.decode('utf-8')
+
+            return payload
+
+    def _encode_text(self, s):
         if isinstance(s, unicode):
             return s.encode('utf-8')
         elif isinstance(s, str):
@@ -150,16 +187,19 @@ class WebSocketVersion7(WebSocket):
         else:
             raise Exception('Invalid encoding')
 
+    def _is_opcode_invalid(self, opcode):
+        return opcode < self.OPCODE_TEXT or (opcode > self.OPCODE_BINARY and 
+                opcode < self.OPCODE_CLOSE) or opcode > self.OPCODE_PONG
+
     def send(self, opcode, message):
         if self.websocket_closed:
             raise Exception('Connection was terminated')
 
-        if opcode < self.OPCODE_TEXT or (opcode > self.OPCODE_BINARY and 
-                opcode < self.OPCODE_CLOSE) or opcode > self.OPCODE_PONG:
+        if self._is_opcode_invalid(opcode):
             raise Exception('Invalid opcode %d' % opcode)
 
         if opcode == self.OPCODE_TEXT:
-            message = self._encodeText(message)
+            message = self._encode_text(message)
 
         length = len(message)
 
@@ -170,13 +210,16 @@ class WebSocketVersion7(WebSocket):
             preamble = struct.pack('!BB', self.FIN | opcode, length)
         elif length < 2 ** 16:
             preamble = struct.pack('!BBH', self.FIN | opcode, self.LEN_16, length)
-        else:
+        elif length < 2 ** 64:
             preamble = struct.pack('!BBQ', self.FIN | opcode, self.LEN_64, length)
+        else:
+            # this can't really happen, but for correctness sake...
+            raise Exception('Message is too long')
 
         self.socket.sendall(preamble + message)
 
     def close(self, reason, message):
-        message = self._encodeText(message)
+        message = self._encode_text(message)
         self.send(self.OPCODE_CLOSE, struct.pack('!H%ds' % len(message), reason, message))
         self.websocket_closed = True
 

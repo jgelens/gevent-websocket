@@ -108,6 +108,7 @@ class WebSocketVersion7(WebSocket):
     MASK = int("10000000", 2)
     PAYLOAD = int("01111111", 2)
 
+    OPCODE_FRAG = 0x0
     OPCODE_TEXT = 0x1
     OPCODE_BINARY = 0x2
     OPCODE_CLOSE = 0x8
@@ -116,6 +117,7 @@ class WebSocketVersion7(WebSocket):
 
     REASON_NORMAL = 1000
     REASON_GOING_AWAY = 1001
+    REASON_PROTOCOL_ERROR = 1002
 
     LEN_16 = 126
     LEN_64 = 127
@@ -127,13 +129,15 @@ class WebSocketVersion7(WebSocket):
         self.protocol = environ.get('HTTP_SEC_WEBSOCKET_PROTOCOL', 'unknown')
         self.path = environ.get('PATH_INFO')
         self.websocket_closed = False
+        self._fragments = []
 
     def _read_from_socket(self, count):
         return self.rfile.read(count)
 
+    # TODO: replace all magic numbers with constants
     def wait(self):
-        msg = ''
         while True:
+            payload = ''
             if self.websocket_closed:
                 return None
 
@@ -144,8 +148,25 @@ class WebSocketVersion7(WebSocket):
                 return None
 
             opcode = opcode_octet & self.OPCODE
+            is_final_frag = (self.FIN & opcode_octet) != 0
+
             if self._is_opcode_invalid(opcode):
                 self.close(1002, 'Invalid opcode %x' % opcode)
+                return None
+            
+            if not is_final_frag and self.OPCODE_CLOSE <= opcode <= self.OPCODE_PONG:
+                self.close(self.REASON_PROTOCOL_ERROR, 'Control frames cannot be fragmented')
+                return None
+
+            if len(self._fragments) > 0 and not is_final_frag and opcode != self.OPCODE_FRAG:
+                self.close(self.REASON_PROTOCOL_ERROR,
+                        'Received new fragment frame with non-zero opcode')
+                return None
+
+            if len(self._fragments) > 0 and is_final_frag and (
+                    self.OPCODE_TEXT <= opcode <= self.OPCODE_BINARY):
+                self.close(self.REASON_PROTOCOL_ERROR,
+                        'Received new unfragmented data frame during fragmented message')
                 return None
 
             if not self.MASK & length_octet:
@@ -153,7 +174,10 @@ class WebSocketVersion7(WebSocket):
                 return None
 
             length_code = length_octet & self.PAYLOAD
-            is_final_frag = (self.FIN & opcode) != 0
+
+            if length_code > 125 and (self.OPCODE_CLOSE <= opcode <= self.OPCODE_PONG):
+                self.close(1002, 'Control frame payload cannot be larger than 125 bytes')
+                return None
 
             if length_code < 126:
                 length = length_code
@@ -166,18 +190,38 @@ class WebSocketVersion7(WebSocket):
 
             mask_octets = struct.unpack('!BBBB', self._read_from_socket(4))
             masked_payload = self._read_from_socket(length)
+
             payload = ''
 
-            # TODO: optimize me
             j = 0
             for c in masked_payload:
+                # TODO: optimize me? http://www.skymind.com/~ocrow/python_string/
                 payload += chr(ord(c) ^ mask_octets[j])
                 j = (j + 1) % 4
 
             if opcode == self.OPCODE_TEXT:
                 payload = payload.decode('utf-8')
+            elif opcode == self.OPCODE_CLOSE:
+                if length >= 2:
+                    reason, message = struct.unpack('!H%ds' % (length - 2), payload)
+                else:
+                    reason = message = None
 
-            return payload
+                self.close(1000, '')
+                return (reason, message)
+
+            if opcode == self.OPCODE_PING:
+                self.send(self.OPCODE_PONG, payload)
+                return (self.OPCODE_PING, payload)
+            elif opcode == self.OPCODE_PONG:
+                return (self.OPCODE_PONG, payload)
+
+            if is_final_frag:
+                payload = ''.join(self._fragments) + payload
+                self._fragments = []
+                return payload
+            else:
+                self._fragments.append(payload)
 
     def _encode_text(self, s):
         if isinstance(s, unicode):
@@ -188,7 +232,7 @@ class WebSocketVersion7(WebSocket):
             raise Exception('Invalid encoding')
 
     def _is_opcode_invalid(self, opcode):
-        return opcode < self.OPCODE_TEXT or (opcode > self.OPCODE_BINARY and 
+        return opcode < self.OPCODE_FRAG or (opcode > self.OPCODE_BINARY and 
                 opcode < self.OPCODE_CLOSE) or opcode > self.OPCODE_PONG
 
     def send(self, opcode, message):

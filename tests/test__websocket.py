@@ -789,5 +789,478 @@ class TestWebSocketVersion7(TestCase):
 
         fd.close();
 
+    def test_wait_control_frames_of_unusual_size(self):
+        opcodes = [WebSocketVersion7.OPCODE_CLOSE,
+                WebSocketVersion7.OPCODE_PING,
+                WebSocketVersion7.OPCODE_PONG]
+        expected_msg = 'Control frame payload cannot be larger than 125 bytes'
+        for test_opcode in opcodes:
+            msg = ''
+            mask = 0x42424242
+            encoded_msg = self._get_payload(mask, msg)
+
+            fd = self.connect().makefile(bufsize=1)
+
+            fd.write(self.GOOD_HEADERS)
+            read_http(fd, code=101, reason='Switching Protocols')
+
+            fd.write(struct.pack('!BBHL',
+                WebSocketVersion7.FIN | test_opcode, 
+                WebSocketVersion7.MASK | 126, 0, mask))
+
+            frame = self.ws.wait()
+            assert self.ws.websocket_closed, \
+                    'Failed to close connection when sent a frame of unusual size'
+
+            preamble = fd.read(2)
+
+            opcode, length = struct.unpack('!BB', preamble)
+            assert opcode & WebSocketVersion7.FIN, 'FIN must be set'
+            assert (opcode & WebSocketVersion7.OPCODE) == 8, 'Opcode must be 0x8'
+            assert (length & WebSocketVersion7.MASK) == 0, 'MASK must not be set'
+
+            reason = fd.read(2)
+            reason = struct.unpack('!H', reason)[0]
+            assert reason == 1002, 'Expected reason to be 1002, but got %d' % reason
+
+            rxd_msg = fd.read(length - 2).decode('utf-8', 'replace')
+            assert rxd_msg == expected_msg, 'Wrong message "%s"' % rxd_msg
+
+            fd.close();
+
+            fd = self.connect().makefile(bufsize=1)
+
+            fd.write(self.GOOD_HEADERS)
+            read_http(fd, code=101, reason='Switching Protocols')
+
+            fd.write(struct.pack('!BBQL',
+                WebSocketVersion7.FIN | test_opcode, 
+                WebSocketVersion7.MASK | 127, length, mask))
+
+            frame = self.ws.wait()
+            assert self.ws.websocket_closed, \
+                    'Failed to close connection when sent a frame of unusual size'
+
+            preamble = fd.read(2)
+
+            opcode, length = struct.unpack('!BB', preamble)
+            assert opcode & WebSocketVersion7.FIN, 'FIN must be set'
+            assert (opcode & WebSocketVersion7.OPCODE) == 8, 'Opcode must be 0x8'
+            assert (length & WebSocketVersion7.MASK) == 0, 'MASK must not be set'
+
+            reason = fd.read(2)
+            reason = struct.unpack('!H', reason)[0]
+            assert reason == 1002, 'Expected reason to be 1002, but got %d' % reason
+
+            rxd_msg = fd.read(length - 2).decode('utf-8', 'replace')
+            assert rxd_msg == expected_msg, 'Wrong message "%s"' % rxd_msg
+
+            fd.close();
+
+    def test_wait_close_frame(self):
+        fd = self.connect().makefile(bufsize=1)
+
+        fd.write(self.GOOD_HEADERS)
+        read_http(fd, code=101, reason='Switching Protocols')
+
+        msg = 'Hello, websocket'
+        mask = 0x42424242
+        reason = 1000
+        encoded_msg = self._get_payload(mask, msg)
+        length = len(encoded_msg) + 2
+        fd.write(struct.pack('!BBLH%ds' % length,
+            WebSocketVersion7.FIN | WebSocketVersion7.OPCODE_CLOSE,
+            WebSocketVersion7.MASK | length, mask, reason ^ (mask >> 16), encoded_msg))
+
+        rxd_msg = self.ws.wait()
+        assert self.ws.websocket_closed, 'Did not close connection when sent a close frame'
+        assert rxd_msg == (reason, msg), 'Wrong result "%s"' % (rxd_msg,)
+
+        preamble = fd.read(2)
+        opcode, length = struct.unpack('!BB', preamble)
+        assert opcode & WebSocketVersion7.FIN, 'FIN must be set'
+        assert (opcode & WebSocketVersion7.OPCODE) == WebSocketVersion7.OPCODE_CLOSE, \
+                'Opcode must be %x' % WebSocketVersion7.OPCODE_CLOSE
+        assert (length & WebSocketVersion7.MASK) == 0, 'MASK must not be set'
+        assert length == 2, 'The payload length must be 2, but got %d' % length
+        
+        reason = struct.unpack('!H', fd.read(2))[0]
+        assert reason == 1000, 'The reason must be 1000, but got %d' % reason
+
+        fd.close();
+
+    def test_wait_close_frame_no_payload(self):
+        fd = self.connect().makefile(bufsize=1)
+
+        fd.write(self.GOOD_HEADERS)
+        read_http(fd, code=101, reason='Switching Protocols')
+
+        msg = ''
+        mask = 0x42424242
+        encoded_msg = self._get_payload(mask, msg)
+        length = 0
+        fd.write(struct.pack('!BBL',
+            WebSocketVersion7.FIN | WebSocketVersion7.OPCODE_CLOSE,
+            WebSocketVersion7.MASK | length, mask))
+
+        rxd_msg = self.ws.wait()
+        assert self.ws.websocket_closed, \
+                'Did not close connection when sent a close frame with no payload'
+        assert rxd_msg == (None, None), 'Wrong result "%s"' % (rxd_msg,)
+
+        preamble = fd.read(2)
+        opcode, length = struct.unpack('!BB', preamble)
+        assert opcode & WebSocketVersion7.FIN, 'FIN must be set'
+        assert (opcode & WebSocketVersion7.OPCODE) == WebSocketVersion7.OPCODE_CLOSE, \
+                'Opcode must be %x' % WebSocketVersion7.OPCODE_CLOSE
+        assert (length & WebSocketVersion7.MASK) == 0, 'MASK must not be set'
+        assert length == 2, 'The payload length must be 2, but got %d' % length
+        
+        reason = struct.unpack('!H', fd.read(2))[0]
+        assert reason == WebSocketVersion7.REASON_NORMAL, \
+                'The reason must be 1000, but got %d' % reason
+
+        fd.close();
+
+    def test_wait_ping_frame(self):
+        fd = self.connect().makefile(bufsize=1)
+
+        fd.write(self.GOOD_HEADERS)
+        read_http(fd, code=101, reason='Switching Protocols')
+
+        msg = 'Hello, websocket'
+        mask = 0x42424242
+        encoded_msg = self._get_payload(mask, msg)
+        length = len(encoded_msg)
+        fd.write(struct.pack('!BBL%ds' % length,
+            WebSocketVersion7.FIN | WebSocketVersion7.OPCODE_PING,
+            WebSocketVersion7.MASK | length, mask, encoded_msg))
+
+        rxd_msg = self.ws.wait()
+        assert not self.ws.websocket_closed, 'Closed connection when sent a ping frame'
+        assert rxd_msg == (WebSocketVersion7.OPCODE_PING, msg.encode('utf-8')), \
+                'Wrong result "%s"' % (rxd_msg,)
+
+        preamble = fd.read(2)
+        opcode, length = struct.unpack('!BB', preamble)
+        assert opcode & WebSocketVersion7.FIN, 'FIN must be set'
+        assert (opcode & WebSocketVersion7.OPCODE) == WebSocketVersion7.OPCODE_PONG, \
+                'Opcode must be %x' % WebSocketVersion7.OPCODE_PONG
+        assert (length & WebSocketVersion7.MASK) == 0, 'MASK must not be set'
+        assert length == len(encoded_msg), 'Wrong payload length. Got %d' % length
+
+        txd_msg = fd.read(length)
+        assert txd_msg == msg.encode('utf-8'), 'Wrong message "%s", expected "%s"' % (txd_msg, msg)
+
+        fd.close();
+
+    def test_wait_pong_frame(self):
+        fd = self.connect().makefile(bufsize=1)
+
+        fd.write(self.GOOD_HEADERS)
+        read_http(fd, code=101, reason='Switching Protocols')
+
+        msg = 'Hello, websocket'
+        mask = 0x42424242
+        encoded_msg = self._get_payload(mask, msg)
+        length = len(encoded_msg)
+        fd.write(struct.pack('!BBL%ds' % length,
+            WebSocketVersion7.FIN | WebSocketVersion7.OPCODE_PONG,
+            WebSocketVersion7.MASK | length, mask, encoded_msg))
+
+        rxd_msg = self.ws.wait()
+        assert not self.ws.websocket_closed, 'Closed connection when sent a pong frame'
+        assert rxd_msg == (WebSocketVersion7.OPCODE_PONG, msg.encode('utf-8')), \
+                'Wrong result "%s"' % (rxd_msg,)
+
+        fd.close();
+
+    def test_wait_fragmented_control_frame(self):
+        opcodes = [WebSocketVersion7.OPCODE_CLOSE,
+                WebSocketVersion7.OPCODE_PING,
+                WebSocketVersion7.OPCODE_PONG]
+        expected_msg = 'Control frames cannot be fragmented'
+        for test_opcode in opcodes:
+            msg = ''
+            mask = 0x42424242
+            encoded_msg = self._get_payload(mask, msg)
+
+            fd = self.connect().makefile(bufsize=1)
+
+            fd.write(self.GOOD_HEADERS)
+            read_http(fd, code=101, reason='Switching Protocols')
+
+            fd.write(struct.pack('!BBL', test_opcode, WebSocketVersion7.MASK | 0, mask))
+
+            frame = self.ws.wait()
+            assert self.ws.websocket_closed, \
+                    'Failed to close connection when sent a fragmented control frame'
+
+            preamble = fd.read(2)
+
+            opcode, length = struct.unpack('!BB', preamble)
+            assert opcode & WebSocketVersion7.FIN, 'FIN must be set'
+            assert (opcode & WebSocketVersion7.OPCODE) == 8, 'Opcode must be 0x8'
+            assert (length & WebSocketVersion7.MASK) == 0, 'MASK must not be set'
+
+            reason = fd.read(2)
+            reason = struct.unpack('!H', reason)[0]
+            assert reason == 1002, 'Expected reason to be 1002, but got %d' % reason
+
+            rxd_msg = fd.read(length - 2).decode('utf-8', 'replace')
+            assert rxd_msg == expected_msg, 'Wrong message "%s"' % rxd_msg
+
+            fd.close();
+
+    def test_wait_unfinished_fragmented_message(self):
+        fd = self.connect().makefile(bufsize=1)
+
+        fd.write(self.GOOD_HEADERS)
+        read_http(fd, code=101, reason='Switching Protocols')
+
+        expected_msg = 'Received new unfragmented data frame during fragmented message'
+
+        msg = 'Hello, '
+        mask = 42
+        encoded_msg = self._get_payload(mask, msg)
+        length = len(encoded_msg)
+        fd.write(struct.pack('!BBL%ds' % length,
+            WebSocketVersion7.OPCODE_TEXT, 
+            WebSocketVersion7.MASK | length, mask, encoded_msg))
+
+        fd.write(struct.pack('!BBL%ds' % length,
+            WebSocketVersion7.FIN | WebSocketVersion7.OPCODE_TEXT, 
+            WebSocketVersion7.MASK | length, mask, encoded_msg))
+
+        frame = self.ws.wait()
+        assert self.ws.websocket_closed, \
+                'Failed to close connection when sent new unfragmented ' + \
+                'data frame during fragmented message'
+
+        preamble = fd.read(2)
+
+        opcode, length = struct.unpack('!BB', preamble)
+        assert opcode & WebSocketVersion7.FIN, 'FIN must be set'
+        assert (opcode & WebSocketVersion7.OPCODE) == 8, 'Opcode must be 0x8'
+        assert (length & WebSocketVersion7.MASK) == 0, 'MASK must not be set'
+
+        reason = fd.read(2)
+        reason = struct.unpack('!H', reason)[0]
+        assert reason == 1002, 'Expected reason to be 1002, but got %d' % reason
+
+        rxd_msg = fd.read(length - 2).decode('utf-8', 'replace')
+        assert rxd_msg == expected_msg, 'Wrong message "%s"' % rxd_msg
+
+        fd.close();
+
+    def test_wait_bad_fragment_opcode(self):
+        fd = self.connect().makefile(bufsize=1)
+
+        fd.write(self.GOOD_HEADERS)
+        read_http(fd, code=101, reason='Switching Protocols')
+
+        expected_msg = 'Received new fragment frame with non-zero opcode'
+
+        msg = 'Hello, '
+        mask = 42
+        encoded_msg = self._get_payload(mask, msg)
+        length = len(encoded_msg)
+        fd.write(struct.pack('!BBL%ds' % length,
+            WebSocketVersion7.OPCODE_TEXT, 
+            WebSocketVersion7.MASK | length, mask, encoded_msg))
+
+        fd.write(struct.pack('!BBL%ds' % length,
+            WebSocketVersion7.OPCODE_TEXT, 
+            WebSocketVersion7.MASK | length, mask, encoded_msg))
+
+        frame = self.ws.wait()
+        assert self.ws.websocket_closed, \
+                'Failed to close connection when sent fragment with non-zero opcode'
+
+        preamble = fd.read(2)
+
+        opcode, length = struct.unpack('!BB', preamble)
+        assert opcode & WebSocketVersion7.FIN, 'FIN must be set'
+        assert (opcode & WebSocketVersion7.OPCODE) == 8, 'Opcode must be 0x8'
+        assert (length & WebSocketVersion7.MASK) == 0, 'MASK must not be set'
+
+        reason = fd.read(2)
+        reason = struct.unpack('!H', reason)[0]
+        assert reason == 1002, 'Expected reason to be 1002, but got %d' % reason
+
+        rxd_msg = fd.read(length - 2).decode('utf-8', 'replace')
+        assert rxd_msg == expected_msg, 'Wrong message "%s"' % rxd_msg
+
+        fd.close();
+
+    def test_wait_two_fragments(self):
+        fd = self.connect().makefile(bufsize=1)
+
+        fd.write(self.GOOD_HEADERS)
+        read_http(fd, code=101, reason='Switching Protocols')
+
+        expected_msg = ''
+
+        msg = 'Hello, '
+        expected_msg += msg
+        mask = 42
+        encoded_msg = self._get_payload(mask, msg)
+        length = len(encoded_msg)
+        fd.write(struct.pack('!BBL%ds' % length,
+            WebSocketVersion7.OPCODE_TEXT, 
+            WebSocketVersion7.MASK | length, mask, encoded_msg))
+
+        msg = 'websocket'
+        expected_msg += msg
+        mask = 23
+        encoded_msg = self._get_payload(mask, msg)
+        length = len(encoded_msg)
+        fd.write(struct.pack('!BBL%ds' % length,
+            WebSocketVersion7.FIN | WebSocketVersion7.OPCODE_FRAG, 
+            WebSocketVersion7.MASK | length, mask, encoded_msg))
+
+        rxd_msg = self.ws.wait()
+        assert not self.ws.websocket_closed, 'Closed connection when sent a good frame'
+        assert rxd_msg == expected_msg, 'Wrong message "%s"' % rxd_msg
+
+        fd.close();
+
+    def test_wait_three_fragments(self):
+        fd = self.connect().makefile(bufsize=1)
+
+        fd.write(self.GOOD_HEADERS)
+        read_http(fd, code=101, reason='Switching Protocols')
+
+        expected_msg = ''
+
+        msg = 'Hello, '
+        expected_msg += msg
+        mask = 42
+        encoded_msg = self._get_payload(mask, msg)
+        length = len(encoded_msg)
+        fd.write(struct.pack('!BBL%ds' % length,
+            WebSocketVersion7.OPCODE_TEXT, 
+            WebSocketVersion7.MASK | length, mask, encoded_msg))
+
+        msg = 'websocket'
+        expected_msg += msg
+        mask = 1337
+        encoded_msg = self._get_payload(mask, msg)
+        length = len(encoded_msg)
+        fd.write(struct.pack('!BBL%ds' % length,
+            WebSocketVersion7.OPCODE_FRAG, 
+            WebSocketVersion7.MASK | length, mask, encoded_msg))
+
+        msg = '!'
+        expected_msg += msg
+        mask = 23
+        encoded_msg = self._get_payload(mask, msg)
+        length = len(encoded_msg)
+        fd.write(struct.pack('!BBL%ds' % length,
+            WebSocketVersion7.FIN | WebSocketVersion7.OPCODE_FRAG, 
+            WebSocketVersion7.MASK | length, mask, encoded_msg))
+
+        rxd_msg = self.ws.wait()
+        assert not self.ws.websocket_closed, 'Closed connection when sent a good frame'
+        assert rxd_msg == expected_msg, 'Wrong message "%s"' % rxd_msg
+
+        fd.close();
+
+    def test_wait_control_frame_during_fragmented_message(self):
+        fd = self.connect().makefile(bufsize=1)
+
+        fd.write(self.GOOD_HEADERS)
+        read_http(fd, code=101, reason='Switching Protocols')
+
+        expected_msg = ''
+
+        msg = 'Hello, '
+        expected_msg += msg
+        mask = 42
+        encoded_msg = self._get_payload(mask, msg)
+        length = len(encoded_msg)
+        fd.write(struct.pack('!BBL%ds' % length,
+            WebSocketVersion7.OPCODE_TEXT, 
+            WebSocketVersion7.MASK | length, mask, encoded_msg))
+
+        ping_msg = 'Marco!'
+        mask = 0x42424242
+        encoded_ping_msg = self._get_payload(mask, ping_msg)
+        length = len(encoded_ping_msg)
+        fd.write(struct.pack('!BBL%ds' % length,
+            WebSocketVersion7.FIN | WebSocketVersion7.OPCODE_PING,
+            WebSocketVersion7.MASK | length, mask, encoded_ping_msg))
+
+        msg = 'websocket'
+        expected_msg += msg
+        mask = 23
+        encoded_msg = self._get_payload(mask, msg)
+        length = len(encoded_msg)
+        fd.write(struct.pack('!BBL%ds' % length,
+            WebSocketVersion7.FIN | WebSocketVersion7.OPCODE_FRAG, 
+            WebSocketVersion7.MASK | length, mask, encoded_msg))
+
+        rxd_msg = self.ws.wait()
+        assert not self.ws.websocket_closed, 'Closed connection when sent a ping frame'
+        assert rxd_msg == (WebSocketVersion7.OPCODE_PING, ping_msg.encode('utf-8')), \
+                'Wrong result "%s"' % (rxd_msg,)
+
+        preamble = fd.read(2)
+        opcode, length = struct.unpack('!BB', preamble)
+        assert opcode & WebSocketVersion7.FIN, 'FIN must be set'
+        assert (opcode & WebSocketVersion7.OPCODE) == WebSocketVersion7.OPCODE_PONG, \
+                'Opcode must be %x' % WebSocketVersion7.OPCODE_PONG
+        assert (length & WebSocketVersion7.MASK) == 0, 'MASK must not be set'
+        assert length == len(encoded_ping_msg), 'Wrong payload length. Got %d' % length
+
+        txd_msg = fd.read(length)
+        assert txd_msg == ping_msg.encode('utf-8'), \
+                'Wrong message "%s", expected "%s"' % (txd_msg, ping_msg)
+
+        rxd_msg = self.ws.wait()
+        assert not self.ws.websocket_closed, 'Closed connection when sent a good frame'
+        assert rxd_msg == expected_msg, \
+                'Wrong message "%s", expected "%s"' % (rxd_msg, expected_msg)
+
+        fd.close();
+
+    def test_wait_two_fragmented_messages(self):
+        fd = self.connect().makefile(bufsize=1)
+
+        fd.write(self.GOOD_HEADERS)
+        read_http(fd, code=101, reason='Switching Protocols')
+
+        for x in xrange(0, 2):
+            expected_msg = ''
+
+            msg = 'Hello, '
+            expected_msg += msg
+            mask = 42
+            encoded_msg = self._get_payload(mask, msg)
+            length = len(encoded_msg)
+            fd.write(struct.pack('!BBL%ds' % length,
+                WebSocketVersion7.OPCODE_TEXT, 
+                WebSocketVersion7.MASK | length, mask, encoded_msg))
+
+            msg = 'websocket %d' % x
+            expected_msg += msg
+            mask = 23
+            encoded_msg = self._get_payload(mask, msg)
+            length = len(encoded_msg)
+            fd.write(struct.pack('!BBL%ds' % length,
+                WebSocketVersion7.FIN | WebSocketVersion7.OPCODE_FRAG, 
+                WebSocketVersion7.MASK | length, mask, encoded_msg))
+
+            rxd_msg = self.ws.wait()
+            assert not self.ws.websocket_closed, 'Closed connection when sent a good frame'
+            assert rxd_msg == expected_msg, 'Wrong message "%s"' % rxd_msg
+
+        fd.close();
+    """
+    TODO: write fragmentation test cases:
+          - too large of a message
+            - make this a config attribute that applies to individual messages as well
+    """
+
 if __name__ == '__main__':
     greentest.main()

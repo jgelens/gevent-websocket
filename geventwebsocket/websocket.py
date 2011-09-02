@@ -118,6 +118,8 @@ class WebSocketVersion7(WebSocket):
     REASON_NORMAL = 1000
     REASON_GOING_AWAY = 1001
     REASON_PROTOCOL_ERROR = 1002
+    REASON_UNSUPPORTED_DATA_TYPE = 1003
+    REASON_TOO_LARGE = 1004
 
     LEN_16 = 126
     LEN_64 = 127
@@ -144,14 +146,14 @@ class WebSocketVersion7(WebSocket):
             opcode_octet, length_octet = struct.unpack('!BB', self._read_from_socket(2))
 
             if self.RSV & opcode_octet:
-                self.close(1002, 'Reserved bits cannot be set')
+                self.close(self.REASON_PROTOCOL_ERROR, 'Reserved bits cannot be set')
                 return None
 
             opcode = opcode_octet & self.OPCODE
             is_final_frag = (self.FIN & opcode_octet) != 0
 
             if self._is_opcode_invalid(opcode):
-                self.close(1002, 'Invalid opcode %x' % opcode)
+                self.close(self.REASON_PROTOCOL_ERROR, 'Invalid opcode %x' % opcode)
                 return None
             
             if not is_final_frag and self.OPCODE_CLOSE <= opcode <= self.OPCODE_PONG:
@@ -170,20 +172,21 @@ class WebSocketVersion7(WebSocket):
                 return None
 
             if not self.MASK & length_octet:
-                self.close(1002, 'MASK must be set')
+                self.close(self.REASON_PROTOCOL_ERROR, 'MASK must be set')
                 return None
 
             length_code = length_octet & self.PAYLOAD
 
-            if length_code > 125 and (self.OPCODE_CLOSE <= opcode <= self.OPCODE_PONG):
-                self.close(1002, 'Control frame payload cannot be larger than 125 bytes')
+            if length_code >= self.LEN_16 and (self.OPCODE_CLOSE <= opcode <= self.OPCODE_PONG):
+                self.close(self.REASON_PROTOCOL_ERROR,
+                        'Control frame payload cannot be larger than 125 bytes')
                 return None
 
-            if length_code < 126:
+            if length_code < self.LEN_16:
                 length = length_code
-            elif length_code == 126:
+            elif length_code == self.LEN_16:
                 length = struct.unpack('!H', self._read_from_socket(2))[0]
-            elif length_code == 127:
+            elif length_code == self.LEN_64:
                 length = struct.unpack('!Q', self._read_from_socket(8))[0]
             else:
                 raise Exception('Calculated invalid length')
@@ -207,7 +210,7 @@ class WebSocketVersion7(WebSocket):
                 else:
                     reason = message = None
 
-                self.close(1000, '')
+                self.close(self.REASON_NORMAL, '')
                 return (reason, message)
 
             if opcode == self.OPCODE_PING:
@@ -250,7 +253,7 @@ class WebSocketVersion7(WebSocket):
         if opcode == self.OPCODE_TEXT:
             message = struct.pack('!%ds' % length, message)
 
-        if length < 126:
+        if length < self.LEN_16:
             preamble = struct.pack('!BB', self.FIN | opcode, length)
         elif length < 2 ** 16:
             preamble = struct.pack('!BBH', self.FIN | opcode, self.LEN_16, length)

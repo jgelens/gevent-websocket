@@ -214,7 +214,7 @@ class WebSocketVersion7(WebSocket):
                 return (reason, message)
 
             if opcode == self.OPCODE_PING:
-                self.send(self.OPCODE_PONG, payload)
+                self.send(payload, opcode=self.OPCODE_PONG)
                 return (self.OPCODE_PING, payload)
             elif opcode == self.OPCODE_PONG:
                 return (self.OPCODE_PONG, payload)
@@ -238,7 +238,7 @@ class WebSocketVersion7(WebSocket):
         return opcode < self.OPCODE_FRAG or (opcode > self.OPCODE_BINARY and 
                 opcode < self.OPCODE_CLOSE) or opcode > self.OPCODE_PONG
 
-    def send(self, opcode, message):
+    def send(self, message, opcode=OPCODE_TEXT):
         if self.websocket_closed:
             raise Exception('Connection was terminated')
 
@@ -267,7 +267,7 @@ class WebSocketVersion7(WebSocket):
 
     def close(self, reason, message):
         message = self._encode_text(message)
-        self.send(self.OPCODE_CLOSE, struct.pack('!H%ds' % len(message), reason, message))
+        self.send(struct.pack('!H%ds' % len(message), reason, message), opcode=self.OPCODE_CLOSE)
         self.websocket_closed = True
 
         # based on gevent/pywsgi.py

@@ -24,7 +24,6 @@
 from gevent import monkey
 monkey.patch_all(thread=False)
 
-import binascii
 import base64
 import struct
 import sys

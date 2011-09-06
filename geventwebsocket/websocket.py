@@ -2,7 +2,6 @@
 # The version as of August 6, 2010 will be implementend once Firefox or
 # Webkit-trunk support this version.
 
-import binascii
 import struct
 
 class WebSocket(object):

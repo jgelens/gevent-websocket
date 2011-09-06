@@ -537,7 +537,7 @@ class TestWebSocketVersion7(TestCase):
         read_http(fd, code=101, reason="Switching Protocols")
 
         msg = 'Hello, websocket'
-        self.ws.send(1, msg)
+        self.ws.send(msg)
 
         preamble = fd.read(2)
         opcode, length = struct.unpack('!BB', preamble)
@@ -559,7 +559,7 @@ class TestWebSocketVersion7(TestCase):
         read_http(fd, code=101, reason="Switching Protocols")
 
         msg = 'Hello, websocket' * 8
-        self.ws.send(1, msg)
+        self.ws.send(msg)
 
         preamble = fd.read(4)
         opcode, length_code, length = struct.unpack('!BBH', preamble)
@@ -582,7 +582,7 @@ class TestWebSocketVersion7(TestCase):
         read_http(fd, code=101, reason="Switching Protocols")
 
         msg = 'Hello, websocket' * 4098
-        self.ws.send(1, msg)
+        self.ws.send(msg)
 
         preamble = fd.read(10)
         opcode, length_code, length = struct.unpack('!BBQ', preamble)
@@ -605,7 +605,7 @@ class TestWebSocketVersion7(TestCase):
         read_http(fd, code=101, reason="Switching Protocols")
 
         msg = struct.pack('!BHB', 129, 23, 42)
-        self.ws.send(2, msg)
+        self.ws.send(msg, opcode=WebSocketVersion7.OPCODE_BINARY)
 
         frame = fd.read(6)
         opcode, length, first, second, third = struct.unpack('!BBBHB', frame)
@@ -629,7 +629,8 @@ class TestWebSocketVersion7(TestCase):
 
             expected_msg = 'Reserved bits cannot be set'
 
-            bad_opcode = WebSocketVersion7.FIN | (reserved_bits << 4) | WebSocketVersion7.OPCODE_TEXT
+            bad_opcode = \
+                    WebSocketVersion7.FIN | (reserved_bits << 4) | WebSocketVersion7.OPCODE_TEXT
             fd.write(struct.pack('!BB', bad_opcode, int('10000000', 2)))
 
             frame = self.ws.wait()

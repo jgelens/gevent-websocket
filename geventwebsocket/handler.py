@@ -79,10 +79,11 @@ class WebSocketHandler(WSGIHandler):
             # 5.2.1 (1)
             self._close_connection()
             return False
-        elif not environ.get("HTTP_HOST") == environ.get("SERVER_NAME"):
+        # XXX: nobody seems to set SERVER_NAME correctly. check the spec
+        #elif not environ.get("HTTP_HOST") == environ.get("SERVER_NAME"):
             # 5.2.1 (2)
-            self._close_connection()
-            return False
+            #self._close_connection()
+            #return False
         elif not key:
             # 5.2.1 (3)
             self._close_connection()

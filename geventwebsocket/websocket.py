@@ -124,13 +124,14 @@ class WebSocketVersion7(WebSocket):
     LEN_16 = 126
     LEN_64 = 127
 
-    def __init__(self, sock, rfile, environ):
+    def __init__(self, sock, rfile, environ, compatibility_mode=True):
         self.rfile = rfile
         self.socket = sock
         self.origin = environ.get('HTTP_SEC_WEBSOCKET_ORIGIN')
         self.protocol = environ.get('HTTP_SEC_WEBSOCKET_PROTOCOL', 'unknown')
         self.path = environ.get('PATH_INFO')
         self.websocket_closed = False
+        self.compatibility_mode = compatibility_mode
         self._fragments = []
 
     def _read_from_socket(self, count):
@@ -211,13 +212,22 @@ class WebSocketVersion7(WebSocket):
                     reason = message = None
 
                 self.close(self.REASON_NORMAL, '')
-                return (reason, message)
+                if not self.compatibility_mode:
+                    return (reason, message)
+                else:
+                    return None
 
             if opcode == self.OPCODE_PING:
                 self.send(payload, opcode=self.OPCODE_PONG)
-                return (self.OPCODE_PING, payload)
+                if not self.compatibility_mode:
+                    return (self.OPCODE_PING, payload)
+                else:
+                    continue
             elif opcode == self.OPCODE_PONG:
-                return (self.OPCODE_PONG, payload)
+                if not self.compatibility_mode:
+                    return (self.OPCODE_PONG, payload)
+                else:
+                    continue
 
             if is_final_frag:
                 payload = ''.join(self._fragments) + payload

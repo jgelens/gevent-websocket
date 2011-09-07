@@ -746,8 +746,9 @@ class TestWebSocketVersion7(TestCase):
             WebSocketVersion7.FIN | WebSocketVersion7.OPCODE_TEXT, 
             WebSocketVersion7.MASK | length, mask, encoded_msg))
 
-        rxd_msg = self.ws.wait()
+        opcode, rxd_msg = self.ws.wait()
         assert not self.ws.websocket_closed, 'Closed connection when sent a good frame'
+        assert opcode == WebSocketVersion7.OPCODE_TEXT, 'Wrong opcode "%x"' % opcode
         assert rxd_msg == msg, 'Wrong message "%s"' % rxd_msg
 
         fd.close();
@@ -766,8 +767,9 @@ class TestWebSocketVersion7(TestCase):
             WebSocketVersion7.FIN | WebSocketVersion7.OPCODE_TEXT, 
             WebSocketVersion7.MASK | 126, length, mask, encoded_msg))
 
-        rxd_msg = self.ws.wait()
+        opcode, rxd_msg = self.ws.wait()
         assert not self.ws.websocket_closed, 'Closed connection when sent a good frame'
+        assert opcode == WebSocketVersion7.OPCODE_TEXT, 'Wrong opcode "%x"' % opcode
         assert rxd_msg == msg, 'Wrong message "%s"' % rxd_msg
 
         fd.close();
@@ -788,8 +790,9 @@ class TestWebSocketVersion7(TestCase):
         fd.write(payload)
 
         self.ws._waiter = 'test'
-        rxd_msg = self.ws.wait()
+        opcode, rxd_msg = self.ws.wait()
         assert not self.ws.websocket_closed, 'Closed connection when sent a good frame'
+        assert opcode == WebSocketVersion7.OPCODE_TEXT, 'Wrong opcode "%x"' % opcode
         assert rxd_msg == msg, 'Wrong message "%s"' % rxd_msg
 
         fd.close();
@@ -879,7 +882,8 @@ class TestWebSocketVersion7(TestCase):
 
         rxd_msg = self.ws.wait()
         assert self.ws.websocket_closed, 'Did not close connection when sent a close frame'
-        assert rxd_msg == (reason, msg), 'Wrong result "%s"' % (rxd_msg,)
+        assert rxd_msg == (WebSocketVersion7.OPCODE_CLOSE, (reason, msg)), \
+                'Wrong result "%s"' % (rxd_msg,)
 
         preamble = fd.read(2)
         opcode, length = struct.unpack('!BB', preamble)
@@ -911,7 +915,8 @@ class TestWebSocketVersion7(TestCase):
         rxd_msg = self.ws.wait()
         assert self.ws.websocket_closed, \
                 'Did not close connection when sent a close frame with no payload'
-        assert rxd_msg == (None, None), 'Wrong result "%s"' % (rxd_msg,)
+        assert rxd_msg == (WebSocketVersion7.OPCODE_CLOSE, (None, None)), \
+                'Wrong result "%s"' % (rxd_msg,)
 
         preamble = fd.read(2)
         opcode, length = struct.unpack('!BB', preamble)
@@ -1124,8 +1129,9 @@ class TestWebSocketVersion7(TestCase):
             WebSocketVersion7.FIN | WebSocketVersion7.OPCODE_FRAG, 
             WebSocketVersion7.MASK | length, mask, encoded_msg))
 
-        rxd_msg = self.ws.wait()
+        opcode, rxd_msg = self.ws.wait()
         assert not self.ws.websocket_closed, 'Closed connection when sent a good frame'
+        assert opcode == WebSocketVersion7.OPCODE_TEXT, 'Wrong opcode "%x"' % opcode
         assert rxd_msg == expected_msg, 'Wrong message "%s"' % rxd_msg
 
         fd.close();
@@ -1165,8 +1171,9 @@ class TestWebSocketVersion7(TestCase):
             WebSocketVersion7.FIN | WebSocketVersion7.OPCODE_FRAG, 
             WebSocketVersion7.MASK | length, mask, encoded_msg))
 
-        rxd_msg = self.ws.wait()
+        opcode, rxd_msg = self.ws.wait()
         assert not self.ws.websocket_closed, 'Closed connection when sent a good frame'
+        assert opcode == WebSocketVersion7.OPCODE_TEXT, 'Wrong opcode "%x"' % opcode
         assert rxd_msg == expected_msg, 'Wrong message "%s"' % rxd_msg
 
         fd.close();
@@ -1222,8 +1229,9 @@ class TestWebSocketVersion7(TestCase):
         assert txd_msg == ping_msg.encode('utf-8'), \
                 'Wrong message "%s", expected "%s"' % (txd_msg, ping_msg)
 
-        rxd_msg = self.ws.wait()
+        opcode, rxd_msg = self.ws.wait()
         assert not self.ws.websocket_closed, 'Closed connection when sent a good frame'
+        assert opcode == WebSocketVersion7.OPCODE_TEXT, 'Wrong opcode "%x"' % opcode
         assert rxd_msg == expected_msg, \
                 'Wrong message "%s", expected "%s"' % (rxd_msg, expected_msg)
 
@@ -1256,11 +1264,13 @@ class TestWebSocketVersion7(TestCase):
                 WebSocketVersion7.FIN | WebSocketVersion7.OPCODE_FRAG, 
                 WebSocketVersion7.MASK | length, mask, encoded_msg))
 
-            rxd_msg = self.ws.wait()
+            opcode, rxd_msg = self.ws.wait()
             assert not self.ws.websocket_closed, 'Closed connection when sent a good frame'
+            assert opcode == WebSocketVersion7.OPCODE_TEXT, 'Wrong opcode "%x"' % opcode
             assert rxd_msg == expected_msg, 'Wrong message "%s"' % rxd_msg
 
         fd.close();
+
     """
     TODO: write fragmentation test cases:
           - too large of a message

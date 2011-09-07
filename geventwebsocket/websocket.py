@@ -132,12 +132,26 @@ class WebSocketVersion7(WebSocket):
         self.websocket_closed = False
         self.compatibility_mode = compatibility_mode
         self._fragments = []
+        self._original_opcode = -1
 
     def _read_from_socket(self, count):
         return self.rfile.read(count)
 
-    # TODO: replace all magic numbers with constants
     def wait(self):
+        """Return the next frame from the socket
+
+        If the next frame is invalid, wait closes the socket and returns None.
+        
+        If the next frame is valid and the websocket instance's
+        compatibility_mode attribute is True, then wait ignores PING and PONG
+        frames, returns None when sent a CLOSE frame and returns the payload
+        for data frames.
+        
+        If the next frame is valid and the websocket instance's
+        compatibility_mode attribute is False, it returns a tuple of the form
+        (opcode, payload).
+        """
+        
         while True:
             payload = ''
             if self.websocket_closed:
@@ -212,11 +226,10 @@ class WebSocketVersion7(WebSocket):
 
                 self.close(self.REASON_NORMAL, '')
                 if not self.compatibility_mode:
-                    return (reason, message)
+                    return (self.OPCODE_CLOSE, (reason, message))
                 else:
                     return None
-
-            if opcode == self.OPCODE_PING:
+            elif opcode == self.OPCODE_PING:
                 self.send(payload, opcode=self.OPCODE_PONG)
                 if not self.compatibility_mode:
                     return (self.OPCODE_PING, payload)
@@ -229,10 +242,18 @@ class WebSocketVersion7(WebSocket):
                     continue
 
             if is_final_frag:
-                payload = ''.join(self._fragments) + payload
-                self._fragments = []
-                return payload
+                if len(self._fragments) > 0:
+                    opcode = self._original_opcode
+                    self._original_opcode = -1
+                    payload = ''.join(self._fragments) + payload
+                    self._fragments = []
+                if not self.compatibility_mode:
+                    return (opcode, payload)
+                else:
+                    return payload
             else:
+                if len(self._fragments) == 0:
+                    self._original_opcode = opcode
                 self._fragments.append(payload)
 
     def _encode_text(self, s):
@@ -248,6 +269,12 @@ class WebSocketVersion7(WebSocket):
                 opcode < self.OPCODE_CLOSE) or opcode > self.OPCODE_PONG
 
     def send(self, message, opcode=OPCODE_TEXT):
+        """Send a frame over the websocket with message as its payload
+
+        Keyword args:
+        opcode -- the opcode to use (default OPCODE_TEXT)
+        """
+
         if self.websocket_closed:
             raise Exception('Connection was terminated')
 
@@ -275,6 +302,9 @@ class WebSocketVersion7(WebSocket):
         self.socket.sendall(preamble + message)
 
     def close(self, reason, message):
+        """Close the websocket, sending the specified reason and message
+        """
+
         message = self._encode_text(message)
         self.send(struct.pack('!H%ds' % len(message), reason, message), opcode=self.OPCODE_CLOSE)
         self.websocket_closed = True

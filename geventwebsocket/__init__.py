@@ -1,9 +1,9 @@
 
-version_info = (0, 2, 3)
+version_info = (0, 3, 0, 'dev')
 __version__ =  ".".join(map(str, version_info))
 
 try:
-    from geventwebsocket.websocket import WebSocket
+    from geventwebsocket.websocket import WebSocket, WebSocketLegacy
 except ImportError:
     import traceback
     traceback.print_exc()

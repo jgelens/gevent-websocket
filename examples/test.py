@@ -34,7 +34,6 @@ def app(environ, start_response):
         return []
 
 
-
 server = pywsgi.WSGIServer(('0.0.0.0', 8000), app,
         handler_class=WebSocketHandler)
 server.serve_forever()

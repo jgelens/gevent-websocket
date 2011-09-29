@@ -1,10 +1,18 @@
 import re
 import struct
-from hashlib import md5
+from hashlib import md5, sha1
+from base64 import b64encode
 
 from gevent.pywsgi import WSGIHandler
-from geventwebsocket import WebSocket
+from geventwebsocket import WebSocket, WebSocketLegacy
 
+
+PROTOCOL_VERSIONS = (
+    "hixie-75",
+    "0",
+    "6",
+)
+MAGIC_STRING = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
 
 class HandShakeError(ValueError):
     """ Hand shake challenge can't be parsed """
@@ -28,53 +36,76 @@ class WebSocketHandler(WSGIHandler):
     def handle_one_response(self, call_wsgi_app=True):
         # In case the client doesn't want to initialize a WebSocket connection
         # we will proceed with the default PyWSGI functionality.
-        if self.environ.get("HTTP_CONNECTION") != "Upgrade" or \
-           self.environ.get("HTTP_UPGRADE") != "WebSocket" or \
-           not self.environ.get("HTTP_ORIGIN") or \
-           not self.accept_upgrade():
-            return super(WebSocketHandler, self).handle_one_response()
-        else:
+
+        if "Upgrade" in self.environ.get("HTTP_CONNECTION", "").split(",") and \
+             "WebSocket" in self.environ.get("HTTP_UPGRADE") and \
+             self.upgrade_allowed():
             self.websocket_connection = True
+        else:
+            return super(WebSocketHandler, self).handle_one_response()
 
-        self.websocket = WebSocket(self.socket, self.rfile, self.environ)
+        self.init_websocket()
         self.environ['wsgi.websocket'] = self.websocket
-
-        # Detect the Websocket protocol
-        if "HTTP_SEC_WEBSOCKET_KEY1" in self.environ:
-            version = 76
-        else:
-            version = 75
-
-        if version == 75:
-            headers = [
-                ("Upgrade", "WebSocket"),
-                ("Connection", "Upgrade"),
-                ("WebSocket-Origin", self.websocket.origin),
-                ("WebSocket-Protocol", self.websocket.protocol),
-                ("WebSocket-Location", "ws://" + self.environ.get('HTTP_HOST') + self.websocket.path),
-            ]
-            self.start_response("101 Web Socket Protocol Handshake", headers)
-        elif version == 76:
-            challenge = self._get_challenge()
-            headers = [
-                ("Upgrade", "WebSocket"),
-                ("Connection", "Upgrade"),
-                ("Sec-WebSocket-Origin", self.websocket.origin),
-                ("Sec-WebSocket-Protocol", self.websocket.protocol),
-                ("Sec-WebSocket-Location", "ws://" + self.environ.get('HTTP_HOST') + self.websocket.path),
-            ]
-
-            self.start_response("101 Web Socket Protocol Handshake", headers)
-            self.write(challenge)
-        else:
-            raise Exception("Version not supported")
 
         if call_wsgi_app:
             return self.application(self.environ, self.start_response)
         else:
             return
 
-    def accept_upgrade(self):
+    def init_websocket(self):
+        version = self.environ.get("HTTP_SEC_WEBSOCKET_VERSION")
+
+        if self.environ.get("HTTP_ORIGIN"):
+            self.websocket = WebSocketLegacy(self.socket, self.rfile, self.environ)
+
+            if "HTTP_SEC_WEBSOCKET_KEY1" in self.environ:
+                self._handshake_hybi00()
+            else:
+                self._handshake_hixie75()
+        else:
+            self.websocket = WebSocket(self.socket, self.rfile, self.environ)
+
+            if version and int(version) in PROTOCOL_VERSIONS:
+                pass
+
+
+    def _handshake_hixie75(self):
+        headers = [
+            ("Upgrade", "WebSocket"),
+            ("Connection", "Upgrade"),
+            ("WebSocket-Origin", self.websocket.origin),
+            ("WebSocket-Protocol", self.websocket.protocol),
+            ("WebSocket-Location", "ws://" + self.environ.get('HTTP_HOST') + self.websocket.path),
+        ]
+        self.start_response("101 Web Socket Protocol Handshake", headers)
+
+    def _handshake_hybi00(self):
+        challenge = self._get_challenge_hybi00()
+
+        headers = [
+            ("Upgrade", "WebSocket"),
+            ("Connection", "Upgrade"),
+            ("Sec-WebSocket-Origin", self.websocket.origin),
+            ("Sec-WebSocket-Protocol", self.websocket.protocol),
+            ("Sec-WebSocket-Location", "ws://" + self.environ.get('HTTP_HOST') + self.websocket.path),
+        ]
+
+        self.start_response("101 Web Socket Protocol Handshake", headers)
+        self.write(challenge)
+
+    def handshake_hybi06(self):
+        raise Exception("Version not yet supported")
+        challenge = self._get_challange_hybi06()
+        headers = [
+            ("Upgrade", "WebSocket"),
+            ("Connection", "Upgrade"),
+            ("Sec-WebSocket-Accept", challenge),
+        ]
+        self.start_response("101 Switching Protocols", headers)
+        self.write(challenge)
+
+
+    def upgrade_allowed(self):
         """
         Returns True if request is allowed to be upgraded.
         If self.allowed_paths is non-empty, self.environ['PATH_INFO'] will
@@ -90,10 +121,13 @@ class WebSocketHandler(WSGIHandler):
             return True
 
     def write(self, data):
-        if self.websocket_connection:
-            self.socket.sendall(data)
+        if data:
+            if self.websocket_connection:
+                self.socket.sendall(data)
+            else:
+                super(WebSocketHandler, self).write(data)
         else:
-            super(WebSocketHandler, self).write(data)
+            raise Exception("No data to send")
 
     def start_response(self, status, headers, exc_info=None):
         if self.websocket_connection:
@@ -122,7 +156,7 @@ class WebSocketHandler(WSGIHandler):
 
         return key_number / spaces
 
-    def _get_challenge(self):
+    def _get_challenge_hybi00(self):
         key1 = self.environ.get('HTTP_SEC_WEBSOCKET_KEY1')
         key2 = self.environ.get('HTTP_SEC_WEBSOCKET_KEY2')
 
@@ -146,6 +180,10 @@ class WebSocketHandler(WSGIHandler):
         challenge += key3
 
         return md5(challenge).digest()
+
+    def _get_challenge_hybi06(self):
+        key = self.environ.get("HTTP_SEC_WEBSOCKET_KEY")
+        return b64encode(sha1(key + MAGIC_STRING).digest())
 
     def wait(self):
         return self.websocket.wait()

@@ -1,13 +1,13 @@
-# This class implements the Websocket protocol draft version as of May 23, 2010
-# The version as of August 6, 2010 will be implementend once Firefox or
-# Webkit-trunk support this version.
-
 class WebSocket(object):
+    pass
+
+
+class WebSocketLegacy(object):
     def __init__(self, sock, rfile, environ):
         self.rfile = rfile
         self.socket = sock
         self.origin = environ.get('HTTP_ORIGIN')
-        self.protocol = environ.get('HTTP_SEC_WEBSOCKET_PROTOCOL', 'unknown')
+        self.protocol = environ.get('HTTP_SEC_WEBSOCKET_PROTOCOL')
         self.path = environ.get('PATH_INFO')
         self.websocket_closed = False
 
@@ -18,7 +18,7 @@ class WebSocket(object):
         if isinstance(message, unicode):
             message = message.encode('utf-8')
         elif isinstance(message, str):
-            message = unicode(message).encode('utf-8')
+            message = unicode(message, 'utf-8').encode('utf-8')
         else:
             raise Exception("Invalid message encoding")
 
@@ -33,7 +33,6 @@ class WebSocket(object):
             return
 
     def _message_length(self):
-        # TODO: buildin security agains lengths greater than 2**31 or 2**32
         length = 0
 
         while True:

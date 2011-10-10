@@ -9,7 +9,7 @@ http://assorted.svn.sourceforge.net/viewvc/assorted/real-time-plotter/trunk/src/
 var iets = "";
 window.onload = function() {
     var data = {};
-    var s = new WebSocket("ws://localhost:8000/data");
+    var s = new MozWebSocket("ws://localhost:8000/data");
     s.onopen = function() {
         //alert('open');
         s.send('hi');

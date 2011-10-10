@@ -7,11 +7,6 @@ from gevent.pywsgi import WSGIHandler
 from geventwebsocket import WebSocketVersion7, WebSocketLegacy
 
 
-PROTOCOL_VERSIONS = (
-    "hixie-75",
-    "0",
-    "6",
-)
 
 class HandShakeError(ValueError):
     """ Hand shake challenge can't be parsed """
@@ -22,6 +17,7 @@ class WebSocketHandler(WSGIHandler):
     """ Automatically upgrades the connection to websockets. """
 
     GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
+    SUPPORTED_VERSIONS = (7,)
 
     def __init__(self, *args, **kwargs):
         self.websocket_connection = False
@@ -71,12 +67,22 @@ class WebSocketHandler(WSGIHandler):
                 self._handshake_hybi00()
             else:
                 self._handshake_hixie75()
+
+            return True
         else:
             print "NEW ", version
             self.websocket = WebSocketVersion7(self.socket, self.rfile, self.environ)
 
-            if version and int(version) in PROTOCOL_VERSIONS:
+            if int(version) in self.SUPPORTED_VERSIONS:
+                return True
+            else:
                 pass
+                # TODO: not support by websockets yet
+                #headers = [
+                #    ("Sec-WebSocket-Version", self.SUPPORTED_VERSION),
+                #]
+                #self.start_response("400 Bad Request", headers)
+                #self._close_connection()
 
 
     def _handshake_hixie75(self):

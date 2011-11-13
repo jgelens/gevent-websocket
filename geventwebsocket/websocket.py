@@ -100,6 +100,8 @@ class WebSocket(object):
             else:
                 raise IOError("Reveiced an invalid message")
 
+
+
 class WebSocketVersion7(WebSocket):
     FIN = int("10000000", 2)
     RSV = int("01110000", 2)
@@ -107,7 +109,7 @@ class WebSocketVersion7(WebSocket):
     MASK = int("10000000", 2)
     PAYLOAD = int("01111111", 2)
 
-    OPCODE_FRAG = 0x0
+    OPCODE_CONTINUATION = 0x0
     OPCODE_TEXT = 0x1
     OPCODE_BINARY = 0x2
     OPCODE_CLOSE = 0x8
@@ -141,83 +143,108 @@ class WebSocketVersion7(WebSocket):
         """Return the next frame from the socket
 
         If the next frame is invalid, wait closes the socket and returns None.
-        
+
         If the next frame is valid and the websocket instance's
         compatibility_mode attribute is True, then wait ignores PING and PONG
         frames, returns None when sent a CLOSE frame and returns the payload
         for data frames.
-        
+
         If the next frame is valid and the websocket instance's
         compatibility_mode attribute is False, it returns a tuple of the form
         (opcode, payload).
         """
-        
+
         while True:
-            payload = ''
             if self.websocket_closed:
                 return None
 
-            opcode_octet, length_octet = struct.unpack('!BB', self._read_from_socket(2))
+            payload = ""
+            first_byte, second_byte = struct.unpack('!BB', self._read_from_socket(2))
 
-            if self.RSV & opcode_octet:
-                self.close(self.REASON_PROTOCOL_ERROR, 'Reserved bits cannot be set')
-                return None
+            fin = (first_byte >> 7) & 1
+            rsv1 = (first_byte >> 6) & 1
+            rsv2 = (first_byte >> 5) & 1
+            rsv3 = (first_byte >> 4) & 1
+            opcode = first_byte & 0xf
 
-            opcode = opcode_octet & self.OPCODE
-            is_final_frag = (self.FIN & opcode_octet) != 0
+            # frame-fin = %x0 ; more frames of this message follow
+            #           / %x1 ; final frame of this message
+            if fin not in (0, 1):
+                raise ProtocolException("")
 
-            if self._is_opcode_invalid(opcode):
-                self.close(self.REASON_PROTOCOL_ERROR, 'Invalid opcode %x' % opcode)
-                return None
-            
-            if not is_final_frag and self.OPCODE_CLOSE <= opcode <= self.OPCODE_PONG:
-                self.close(self.REASON_PROTOCOL_ERROR, 'Control frames cannot be fragmented')
-                return None
+            # frame-rsv1 = %x0 ; 1 bit, MUST be 0 unless negotiated otherwise
+            # frame-rsv2 = %x0 ; 1 bit, MUST be 0 unless negotiated otherwise
+            # frame-rsv3 = %x0 ; 1 bit, MUST be 0 unless negotiated otherwise
+            if rsv1 or rsv2 or rsv3:
+                raise ProtocolException('Reserved bits cannot be set')
 
-            if len(self._fragments) > 0 and not is_final_frag and opcode != self.OPCODE_FRAG:
-                self.close(self.REASON_PROTOCOL_ERROR,
-                        'Received new fragment frame with non-zero opcode')
-                return None
+            #if self._is_invalid_opcode(opcode):
+            #    raise ProtocolException('Invalid opcode %x' % opcode)
 
-            if len(self._fragments) > 0 and is_final_frag and (
-                    self.OPCODE_TEXT <= opcode <= self.OPCODE_BINARY):
-                self.close(self.REASON_PROTOCOL_ERROR,
-                        'Received new unfragmented data frame during fragmented message')
-                return None
+            # control frames cannot be fragmented
+            if opcode > 0x7 and fin == 0:
+                raise ProtocolException('Control frames cannot be fragmented')
 
-            if not self.MASK & length_octet:
-                self.close(self.REASON_PROTOCOL_ERROR, 'MASK must be set')
-                return None
+            #if len(self._fragments) > 0 and not is_fin and opcode != self.OPCODE_FRAG:
+            #    self.close(self.REASON_PROTOCOL_ERROR,
+            #            'Received new fragment frame with non-zero opcode')
 
-            length_code = length_octet & self.PAYLOAD
+            #if len(self._fragments) > 0 and is_fin and (
+            #        self.OPCODE_TEXT <= opcode <= self.OPCODE_BINARY):
+            #    self.close(self.REASON_PROTOCOL_ERROR,
+            #            'Received new unfragmented data frame during fragmented message')
 
-            if length_code >= self.LEN_16 and (self.OPCODE_CLOSE <= opcode <= self.OPCODE_PONG):
-                self.close(self.REASON_PROTOCOL_ERROR,
-                        'Control frame payload cannot be larger than 125 bytes')
-                return None
+            mask = (second_byte >> 7) & 1
+            payload_length = (second_byte) & 0x7f
 
-            if length_code < self.LEN_16:
-                length = length_code
-            elif length_code == self.LEN_16:
+            #if not self.MASK & length_octet:
+            #    self.close(self.REASON_PROTOCOL_ERROR, 'MASK must be set')
+
+            #length_code = length_octet & self.PAYLOAD
+
+            # Control frames MUST have a payload length of 125 bytes or less
+            if opcode > 0x7 and payload_length > 125:
+                raise FrameTooLargeException("Control frame payload cannot be larger than 125 bytes")
+
+            if payload_length < 126:
+                length = payload_length
+            if payload_length == 126:
                 length = struct.unpack('!H', self._read_from_socket(2))[0]
-            elif length_code == self.LEN_64:
+            elif payload_length == 127:
                 length = struct.unpack('!Q', self._read_from_socket(8))[0]
             else:
-                raise Exception('Calculated invalid length')
+                raise ProtocolException('Calculated invalid length')
 
-            mask_octets = struct.unpack('!BBBB', self._read_from_socket(4))
-            masked_payload = self._read_from_socket(length)
+            payload = ""
 
-            payload = ''
+            if mask:
+                masking_key = struct.unpack('!BBBB', self._read_from_socket(4))
+                masked_payload = self._read_from_socket(length)
 
-            j = 0
-            for c in masked_payload:
-                # TODO: optimize me? http://www.skymind.com/~ocrow/python_string/
-                payload += chr(ord(c) ^ mask_octets[j])
-                j = (j + 1) % 4
+                masked_payload = bytearray(masked_payload)
+                key = map(ord, masking_key)
+
+                for i in range(len(masked_payload)):
+                    masked_payload[i] = masked_payload[i] ^ key[i%4]
+
+                payload = masked_payload
+
 
             if opcode == self.OPCODE_TEXT:
-                payload = payload.decode('utf-8')
+                self._fragments.append(payload.decode("utf-8", "replace"))
+
+            elif opcode == self.OPCODE_BINARY:
+                self._fragments.append(payload)
+
+            elif opcode == self.OPCODE_CONTINUATION:
+                if len(self._fragments) != 0:
+                    raise ProtocolException("Cannot continue a non started message")
+
+                if opcode == self.OPCODE_TEXT:
+                    self._fragments.append(payload.decode("utf-8", "replace"))
+                else:
+                    self._fragments.append(payload)
+
             elif opcode == self.OPCODE_CLOSE:
                 if length >= 2:
                     reason, message = struct.unpack('!H%ds' % (length - 2), payload)
@@ -229,32 +256,29 @@ class WebSocketVersion7(WebSocket):
                     return (self.OPCODE_CLOSE, (reason, message))
                 else:
                     return None
+
             elif opcode == self.OPCODE_PING:
                 self.send(payload, opcode=self.OPCODE_PONG)
+
                 if not self.compatibility_mode:
                     return (self.OPCODE_PING, payload)
                 else:
                     continue
+
             elif opcode == self.OPCODE_PONG:
                 if not self.compatibility_mode:
                     return (self.OPCODE_PONG, payload)
                 else:
                     continue
 
-            if is_final_frag:
+            if fin == 1:
                 if len(self._fragments) > 0:
-                    opcode = self._original_opcode
-                    self._original_opcode = -1
-                    payload = ''.join(self._fragments) + payload
+                    msg = ''.join(self._fragments)
                     self._fragments = []
                 if not self.compatibility_mode:
-                    return (opcode, payload)
+                    return (opcode, msg)
                 else:
-                    return payload
-            else:
-                if len(self._fragments) == 0:
-                    self._original_opcode = opcode
-                self._fragments.append(payload)
+                    return msg
 
     def _encode_text(self, s):
         if isinstance(s, unicode):
@@ -265,7 +289,7 @@ class WebSocketVersion7(WebSocket):
             raise Exception('Invalid encoding')
 
     def _is_opcode_invalid(self, opcode):
-        return opcode < self.OPCODE_FRAG or (opcode > self.OPCODE_BINARY and 
+        return opcode < self.OPCODE_FRAG or (opcode > self.OPCODE_BINARY and
                 opcode < self.OPCODE_CLOSE) or opcode > self.OPCODE_PONG
 
     def send(self, message, opcode=OPCODE_TEXT):

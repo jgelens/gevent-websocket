@@ -300,6 +300,8 @@ class WebSocketVersion7(WebSocketLegacy):
             # this can't really happen, but for correctness sake...
             raise Exception('Message is too long')
 
+        print preamble, message
+
         self.socket.sendall(preamble + message)
 
     def close(self, reason, message):

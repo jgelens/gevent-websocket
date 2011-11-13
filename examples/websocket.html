@@ -15,7 +15,8 @@ window.onload = function() {
         s.send('hi');
     };
     s.onmessage = function(e) {
-      //alert('got ' + e.data);
+
+      alert('got ' + e.data);
       var lines = e.data.split('\n');
       for (var i = 0; i < lines.length - 1; i++) {
         var parts = lines[i].split(' ');

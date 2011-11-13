@@ -1,3 +1,4 @@
+import base64
 import re
 import struct
 from hashlib import md5, sha1
@@ -32,6 +33,85 @@ class WebSocketHandler(WSGIHandler):
         super(WebSocketHandler, self).__init__(*args, **kwargs)
 
     def handle_one_response(self, call_wsgi_app=True):
+        if self.environ.get("HTTP_ORIGIN"):
+            self._handle_one_legacy_response()
+        elif self.environ.get("HTTP_SEC_WEBSOCKET_VERSION"):
+            version = int(self.environ.get("HTTP_SEC_WEBSOCKET_VERSION"))
+            if version is 7:
+                if not self._handle_one_version7_response():
+                    return
+            else:
+                return
+        else:
+            # not a valid websocket request
+            return super(WebSocketHandler, self).handle_one_response()
+
+        if call_wsgi_app:
+            return self.application(self.environ, self.start_response)
+        else:
+            return
+
+    def _close_connection(self, reason=None):
+        # based on gevent/pywsgi.py
+        # see http://pypi.python.org/pypi/gevent#downloads
+
+        if reason:
+            print "Closing the connection because %s!" % reason
+        if self.socket is not None:
+            try:
+                self.socket._sock.close()
+                self.socket.close()
+            except socket.error:
+                pass
+
+    def _handle_one_version7_response(self):
+        environ = self.environ
+
+        protocol, version = self.request_version.split("/")
+        key = environ.get("HTTP_SEC_WEBSOCKET_KEY")
+
+        # check client handshake for validity
+        if not environ.get("REQUEST_METHOD") == "GET":
+            # 5.2.1 (1)
+            self._close_connection()
+            return False
+        elif not protocol == "HTTP":
+            # 5.2.1 (1)
+            self._close_connection()
+            return False
+        elif float(version) < 1.1:
+            # 5.2.1 (1)
+            self._close_connection()
+            return False
+        # XXX: nobody seems to set SERVER_NAME correctly. check the spec
+        #elif not environ.get("HTTP_HOST") == environ.get("SERVER_NAME"):
+            # 5.2.1 (2)
+            #self._close_connection()
+            #return False
+        elif not key:
+            # 5.2.1 (3)
+            self._close_connection()
+            return False
+        elif len(base64.b64decode(key)) != 16:
+            # 5.2.1 (3)
+            self._close_connection()
+            return False
+
+        #TODO: compare Sec-WebSocket-Origin against self.allowed_paths
+
+        self.websocket_connection = True
+        self.websocket = WebSocketVersion7(self.socket, self.rfile, self.environ)
+        self.environ['wsgi.websocket'] = self.websocket
+
+        headers = [
+            ("Upgrade", "websocket"),
+            ("Connection", "Upgrade"),
+            ("Sec-WebSocket-Accept", base64.b64encode(sha1(key + self.GUID).digest())),
+        ]
+        self.start_response("101 Switching Protocols", headers)
+        return True
+
+    def _handle_one_legacy_response(self):
         # In case the client doesn't want to initialize a WebSocket connection
         # we will proceed with the default PyWSGI functionality.
         print self.environ.get("HTTP_CONNECTION", "").lower().split(",")
@@ -50,138 +130,37 @@ class WebSocketHandler(WSGIHandler):
         self.init_websocket()
         self.environ['wsgi.websocket'] = self.websocket
 
-        if call_wsgi_app:
-            return self.application(self.environ, self.start_response)
+        # Detect the Websocket protocol
+        if "HTTP_SEC_WEBSOCKET_KEY1" in self.environ:
+            version = 76
         else:
-            return
+            version = 75
 
-    def init_websocket(self):
-        version = self.environ.get("HTTP_SEC_WEBSOCKET_VERSION")
-        print "VERSION", version
+        if version == 75:
+            headers = [
+                ("Upgrade", "WebSocket"),
+                ("Connection", "Upgrade"),
+                ("WebSocket-Origin", self.websocket.origin),
+                ("WebSocket-Protocol", self.websocket.protocol),
+                ("WebSocket-Location", "ws://" + self.environ.get('HTTP_HOST') + self.websocket.path),
+            ]
+            self.start_response("101 Web Socket Protocol Handshake", headers)
+        elif version == 76:
+            challenge = self._get_challenge()
+            headers = [
+                ("Upgrade", "WebSocket"),
+                ("Connection", "Upgrade"),
+                ("Sec-WebSocket-Origin", self.websocket.origin),
+                ("Sec-WebSocket-Protocol", self.websocket.protocol),
+                ("Sec-WebSocket-Location", "ws://" + self.environ.get('HTTP_HOST') + self.websocket.path),
+            ]
 
-        if self.environ.get("HTTP_ORIGIN"):
-            print "OLD ", version
-            self.websocket = WebSocketLegacy(self.socket, self.rfile, self.environ)
-
-            if "HTTP_SEC_WEBSOCKET_KEY1" in self.environ:
-                self._handshake_hybi00()
-            else:
-                self._handshake_hixie75()
-
-            return True
+            self.start_response("101 Web Socket Protocol Handshake", headers)
+            self.write(challenge)
         else:
-            print "NEW ", version
-            self.websocket = WebSocketVersion7(self.socket, self.rfile, self.environ)
+            raise Exception("Version not supported")
 
-            if int(version) in self.SUPPORTED_VERSIONS:
-                self._handshake_version7()
-                return True
-            else:
-                pass
-                # TODO: not support by websockets yet
-                #headers = [
-                #    ("Sec-WebSocket-Version", self.SUPPORTED_VERSION),
-                #]
-                #self.start_response("400 Bad Request", headers)
-                #self._close_connection()
-
-
-    def _handshake_hixie75(self):
-        headers = [
-            ("Upgrade", "WebSocket"),
-            ("Connection", "Upgrade"),
-            ("WebSocket-Origin", self.websocket.origin),
-            ("WebSocket-Protocol", self.websocket.protocol),
-            ("WebSocket-Location", "ws://" + self.environ.get('HTTP_HOST') + self.websocket.path),
-        ]
-        self.start_response("101 Web Socket Protocol Handshake", headers)
-
-    def _handshake_hybi00(self):
-        challenge = self._get_challenge_hybi00()
-
-        headers = [
-            ("Upgrade", "WebSocket"),
-            ("Connection", "Upgrade"),
-            ("Sec-WebSocket-Origin", self.websocket.origin),
-            ("Sec-WebSocket-Protocol", self.websocket.protocol),
-            ("Sec-WebSocket-Location", "ws://" + self.environ.get('HTTP_HOST') + self.websocket.path),
-        ]
-
-        self.start_response("101 Web Socket Protocol Handshake", headers)
-        self.write(challenge)
-
-    def _handshake_version7(self):
-        environ = self.environ
-
-        protocol, version = self.request_version.split("/")
-        key = environ.get("HTTP_SEC_WEBSOCKET_KEY").replace(" ", "")
-
-        print key
-
-        # check client handshake for validity
-        if not environ.get("REQUEST_METHOD") == "GET":
-            # 5.2.1 (1)
-            self._close_connection()
-            return False
-        elif not protocol == "HTTP":
-            # 5.2.1 (1)
-            self._close_connection()
-            return False
-        elif float(version) < 1.1:
-            # 5.2.1 (1)
-            self._close_connection()
-            return False
-        # XXX: nobody seems to set SERVER_NAME correctly. check the spec
-        #elif not environ.get("HTTP_HOST") == environ.get("SERVER_NAME"):
-             # 5.2.1 (2)
-             #self._close_connection()
-             #return False
-        elif not key:
-            # 5.2.1 (3)
-            self._close_connection()
-            return False
-        elif len(b64decode(key)) != 16:
-            # 5.2.1 (3)
-            self._close_connection()
-            return False
-
-        headers = [
-            ("Upgrade", "websocket"),
-            ("Connection", "Upgrade"),
-            ("Sec-WebSocket-Accept", b64encode(sha1(key + self.GUID).digest())),
-        ]
-        self.start_response("101 Switching Protocols", headers)
-        print headers
-        return True
-
-
-
-    def _handshake_hybi06(self):
-        raise Exception("Version not yet supported")
-        challenge = self._get_challange_hybi06()
-        headers = [
-            ("Upgrade", "WebSocket"),
-            ("Connection", "Upgrade"),
-            ("Sec-WebSocket-Accept", challenge),
-        ]
-        self.start_response("101 Switching Protocols", headers)
-        self.write(challenge)
-
-    def _close_connection(self, reason=None):
-        # based on gevent/pywsgi.py
-        # see http://pypi.python.org/pypi/gevent#downloads
-
-        if reason:
-            print "Closing the connection because %s!" % reason
-        if self.socket is not None:
-            try:
-                self.socket._sock.close()
-                self.socket.close()
-            except socket.error:
-                pass
-
-
-    def upgrade_allowed(self):
+    def accept_upgrade(self):
         """
         Returns True if request is allowed to be upgraded.
         If self.allowed_paths is non-empty, self.environ['PATH_INFO'] will

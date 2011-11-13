@@ -17,7 +17,7 @@ class WebSocketHandler(WSGIHandler):
     """ Automatically upgrades the connection to websockets. """
 
     GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
-    SUPPORTED_VERSIONS = (7,)
+    SUPPORTED_VERSIONS = (7,8)
 
     def __init__(self, *args, **kwargs):
         self.websocket_connection = False
@@ -74,6 +74,7 @@ class WebSocketHandler(WSGIHandler):
             self.websocket = WebSocketVersion7(self.socket, self.rfile, self.environ)
 
             if int(version) in self.SUPPORTED_VERSIONS:
+                self._handshake_version7()
                 return True
             else:
                 pass
@@ -113,7 +114,9 @@ class WebSocketHandler(WSGIHandler):
         environ = self.environ
 
         protocol, version = self.request_version.split("/")
-        key = environ.get("HTTP_SEC_WEBSOCKET_KEY")
+        key = environ.get("HTTP_SEC_WEBSOCKET_KEY").replace(" ", "")
+
+        print key
 
         # check client handshake for validity
         if not environ.get("REQUEST_METHOD") == "GET":
@@ -141,6 +144,16 @@ class WebSocketHandler(WSGIHandler):
             # 5.2.1 (3)
             self._close_connection()
             return False
+
+        headers = [
+            ("Upgrade", "websocket"),
+            ("Connection", "Upgrade"),
+            ("Sec-WebSocket-Accept", b64encode(sha1(key + self.GUID).digest())),
+        ]
+        self.start_response("101 Switching Protocols", headers)
+        print headers
+        return True
+
 
 
     def _handshake_hybi06(self):

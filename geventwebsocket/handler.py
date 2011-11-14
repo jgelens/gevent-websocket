@@ -2,16 +2,15 @@ import base64
 import re
 import struct
 from hashlib import md5, sha1
-from base64 import b64encode, b64decode
 
 from gevent.pywsgi import WSGIHandler
 from geventwebsocket import WebSocketVersion7, WebSocketLegacy
 
 
-
 class HandShakeError(ValueError):
     """ Hand shake challenge can't be parsed """
     pass
+
 
 
 class WebSocketHandler(WSGIHandler):
@@ -37,7 +36,7 @@ class WebSocketHandler(WSGIHandler):
             self._handle_one_legacy_response()
         elif self.environ.get("HTTP_SEC_WEBSOCKET_VERSION"):
             version = int(self.environ.get("HTTP_SEC_WEBSOCKET_VERSION"))
-            if version is 7:
+            if version in self.SUPPORTED_VERSIONS:
                 if not self._handle_one_version7_response():
                     return
             else:
@@ -69,6 +68,8 @@ class WebSocketHandler(WSGIHandler):
 
         protocol, version = self.request_version.split("/")
         key = environ.get("HTTP_SEC_WEBSOCKET_KEY")
+
+        print key
 
         # check client handshake for validity
         if not environ.get("REQUEST_METHOD") == "GET":
@@ -119,7 +120,7 @@ class WebSocketHandler(WSGIHandler):
         if "upgrade" in self.environ.get("HTTP_CONNECTION", "").lower(). \
              replace(" ", "").split(",") and \
              "websocket" in self.environ.get("HTTP_UPGRADE").lower() and \
-             self.upgrade_allowed():
+             self.accept_upgrade():
             self.websocket_connection = True
         else:
             print "NORMAL"
@@ -127,7 +128,7 @@ class WebSocketHandler(WSGIHandler):
             pprint(self.environ)
             return super(WebSocketHandler, self).handle_one_response()
 
-        self.init_websocket()
+        self.websocket = WebSocketLegacy(self.socket, self.rfile, self.environ)
         self.environ['wsgi.websocket'] = self.websocket
 
         # Detect the Websocket protocol
@@ -211,17 +212,14 @@ class WebSocketHandler(WSGIHandler):
 
         return key_number / spaces
 
-    def _get_challenge_hybi00(self):
+    def _get_challenge(self):
         key1 = self.environ.get('HTTP_SEC_WEBSOCKET_KEY1')
         key2 = self.environ.get('HTTP_SEC_WEBSOCKET_KEY2')
 
-        if not (key1 and key2):
-            message = "Client using old/invalid protocol implementation"
-            headers = [("Content-Length", str(len(message))),]
-            self.start_response("400 Bad Request", headers)
-            self.write(message)
-            self.close_connection = True
-            return
+        if not key1:
+            raise BadRequest("SEC-WEBSOCKET-KEY1 header is missing")
+        if not key2:
+            raise BadRequest("SEC-WEBSOCKET-KEY2 header is missing")
 
         part1 = self._get_key_value(self.environ['HTTP_SEC_WEBSOCKET_KEY1'])
         part2 = self._get_key_value(self.environ['HTTP_SEC_WEBSOCKET_KEY2'])
@@ -229,16 +227,8 @@ class WebSocketHandler(WSGIHandler):
         # This request should have 8 bytes of data in the body
         key3 = self.rfile.read(8)
 
-        challenge = ""
-        challenge += struct.pack("!I", part1)
-        challenge += struct.pack("!I", part2)
-        challenge += key3
+        return md5(struct.pack("!II", part1, part2) + key3).digest()
 
-        return md5(challenge).digest()
-
-    def _get_challenge_hybi06(self):
-        key = self.environ.get("HTTP_SEC_WEBSOCKET_KEY")
-        return b64encode(sha1(key + MAGIC_STRING).digest())
 
     def wait(self):
         return self.websocket.wait()

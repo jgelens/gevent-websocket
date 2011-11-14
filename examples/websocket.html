@@ -9,14 +9,15 @@ http://assorted.svn.sourceforge.net/viewvc/assorted/real-time-plotter/trunk/src/
 var iets = "";
 window.onload = function() {
     var data = {};
-    var s = new MozWebSocket("ws://localhost:8000/data");
+    //var s = new MozWebSocket("ws://localhost:8000/data");
+    var s = new WebSocket("ws://localhost:8000/data");
     s.onopen = function() {
         //alert('open');
         s.send('hi');
     };
     s.onmessage = function(e) {
 
-      alert('got ' + e.data);
+      //alert('got ' + e.data);
       var lines = e.data.split('\n');
       for (var i = 0; i < lines.length - 1; i++) {
         var parts = lines[i].split(' ');

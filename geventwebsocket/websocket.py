@@ -1,9 +1,15 @@
 import struct
 
-
-import struct
-
 class WebSocket(object):
+    pass
+
+
+
+class ProtocolException(Exception):
+    pass
+
+
+class FrameTooLargeException(Exception):
     pass
 
 
@@ -241,7 +247,7 @@ class WebSocketVersion7(WebSocketLegacy):
                 if len(self._fragments) != 0:
                     raise ProtocolException("Cannot continue a non started message")
 
-            if opcode == self.OPCODE_TEXT:
+                if opcode == self.OPCODE_TEXT:
                     self._fragments.append(payload.decode("utf-8", "replace"))
                 else:
                     self._fragments.append(payload)
@@ -290,7 +296,7 @@ class WebSocketVersion7(WebSocketLegacy):
             raise Exception('Invalid encoding')
 
     def _is_opcode_invalid(self, opcode):
-        return opcode < self.OPCODE_FRAG or (opcode > self.OPCODE_BINARY and
+        return opcode < self.OPCODE_CONTINUATION or (opcode > self.OPCODE_BINARY and
                 opcode < self.OPCODE_CLOSE) or opcode > self.OPCODE_PONG
 
     def send(self, message, opcode=OPCODE_TEXT):

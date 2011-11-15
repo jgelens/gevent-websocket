@@ -4,7 +4,6 @@ class WebSocket(object):
     pass
 
 
-
 class ProtocolException(Exception):
     pass
 
@@ -139,14 +138,13 @@ class WebSocketVersion7(WebSocketLegacy):
         self.protocol = environ.get('HTTP_SEC_WEBSOCKET_PROTOCOL', 'unknown')
         self.path = environ.get('PATH_INFO')
         self.websocket_closed = False
-        self.compatibility_mode = compatibility_mode
-        self._fragments = []
-        self._original_opcode = -1
+        self._chunks = bytearray()
+        self._first_opcode = None
 
     def _read_from_socket(self, count):
         return self.rfile.read(count)
 
-    def wait(self):
+    def receive(self):
         """Return the next frame from the socket
 
         If the next frame is invalid, wait closes the socket and returns None.
@@ -192,22 +190,22 @@ class WebSocketVersion7(WebSocketLegacy):
             if opcode > 0x7 and fin == 0:
                 raise ProtocolException('Control frames cannot be fragmented')
 
-            #if len(self._fragments) > 0 and not is_fin and opcode != self.OPCODE_FRAG:
-            #    self.close(self.REASON_PROTOCOL_ERROR,
-            #            'Received new fragment frame with non-zero opcode')
+            if len(self._chunks) > 0 and \
+                    fin == 0 and opcode != self.OPCODE_CONTINUATION:
+                self.close(self.REASON_PROTOCOL_ERROR,
+                        'Received new fragment frame with non-zero opcode')
+                return
 
-            #if len(self._fragments) > 0 and is_fin and (
-            #        self.OPCODE_TEXT <= opcode <= self.OPCODE_BINARY):
-            #    self.close(self.REASON_PROTOCOL_ERROR,
-            #            'Received new unfragmented data frame during fragmented message')
+            if len(self._chunks) > 0 and \
+                    fin == 1 and (self.OPCODE_TEXT <= opcode <= self.OPCODE_BINARY):
+                self.close(self.REASON_PROTOCOL_ERROR,
+                        'Received new unfragmented data frame during fragmented message')
 
             mask = (second_byte >> 7) & 1
             payload_length = (second_byte) & 0x7f
 
-            #if not self.MASK & length_octet:
+            #if not self.MASK & length_octet: # TODO: where is this in the docs?
             #    self.close(self.REASON_PROTOCOL_ERROR, 'MASK must be set')
-
-            #length_code = length_octet & self.PAYLOAD
 
             # Control frames MUST have a payload length of 125 bytes or less
             if opcode > 0x7 and payload_length > 125:
@@ -224,6 +222,7 @@ class WebSocketVersion7(WebSocketLegacy):
 
             payload = ""
 
+            # Unmask the payload if necessary
             if mask:
                 masking_key = struct.unpack('!BBBB', self._read_from_socket(4))
                 masked_payload = self._read_from_socket(length)
@@ -236,21 +235,23 @@ class WebSocketVersion7(WebSocketLegacy):
 
                 payload = masked_payload
 
-
+            # Read application data
             if opcode == self.OPCODE_TEXT:
-                self._fragments.append(payload.decode("utf-8", "replace"))
+                self._first_opcode = opcode
+                self._chunks.extend(payload.decode("utf-8", "replace"))
 
             elif opcode == self.OPCODE_BINARY:
-                self._fragments.append(payload)
+                self._first_opcode = opcode
+                self._chunks.extend(payload)
 
             elif opcode == self.OPCODE_CONTINUATION:
-                if len(self._fragments) != 0:
+                if len(self._chunks) != 0:
                     raise ProtocolException("Cannot continue a non started message")
 
-                if opcode == self.OPCODE_TEXT:
-                    self._fragments.append(payload.decode("utf-8", "replace"))
+                if self._first_opcode == self.OPCODE_TEXT:
+                    self._chunks.extend(payload.decode("utf-8", "replace"))
                 else:
-                    self._fragments.append(payload)
+                    self._chunks.extend(payload)
 
             elif opcode == self.OPCODE_CLOSE:
                 if length >= 2:
@@ -277,15 +278,17 @@ class WebSocketVersion7(WebSocketLegacy):
                     return (self.OPCODE_PONG, payload)
                 else:
                     continue
+            else:
+                raise Exception("Shouldn't happen")
 
             if fin == 1:
-                if len(self._fragments) > 0:
-                    msg = ''.join(self._fragments)
-                    self._fragments = []
-                if not self.compatibility_mode:
-                    return (opcode, msg)
-                else:
-                    return msg
+                msg = ''.join(self._chunks)
+
+                self._first_opcode = False
+                self._chunks = bytearray()
+
+                return msg
+
 
     def _encode_text(self, s):
         if isinstance(s, unicode):

@@ -11,7 +11,7 @@ def handle(ws):
     can dispatch based on path in here, too."""
     if ws.path == '/echo':
         while True:
-            m = ws.wait()
+            m = ws.receive()
             if m is None:
                 break
             ws.send(m)
@@ -27,7 +27,7 @@ def app(environ, start_response):
     if environ['PATH_INFO'] == '/test':
         start_response("200 OK", [('Content-Type', 'text/plain')])
         return ["blaat"]
-    elif environ['PATH_INFO'] == "/data":
+    elif environ['PATH_INFO'] in ("/data", "/echo"):
         handle(environ['wsgi.websocket'])
     else:
         start_response("404 Not Found", [])

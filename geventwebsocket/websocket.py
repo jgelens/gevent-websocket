@@ -213,7 +213,7 @@ class WebSocketVersion7(WebSocketLegacy):
 
             if payload_length < 126:
                 length = payload_length
-            if payload_length == 126:
+            elif payload_length == 126:
                 length = struct.unpack('!H', self._read_from_socket(2))[0]
             elif payload_length == 127:
                 length = struct.unpack('!Q', self._read_from_socket(8))[0]
@@ -228,17 +228,16 @@ class WebSocketVersion7(WebSocketLegacy):
                 masked_payload = self._read_from_socket(length)
 
                 masked_payload = bytearray(masked_payload)
-                key = map(ord, masking_key)
 
                 for i in range(len(masked_payload)):
-                    masked_payload[i] = masked_payload[i] ^ key[i%4]
+                    masked_payload[i] = masked_payload[i] ^ masking_key[i%4]
 
                 payload = masked_payload
 
             # Read application data
             if opcode == self.OPCODE_TEXT:
                 self._first_opcode = opcode
-                self._chunks.extend(payload.decode("utf-8", "replace"))
+                self._chunks.extend(payload)
 
             elif opcode == self.OPCODE_BINARY:
                 self._first_opcode = opcode
@@ -248,10 +247,7 @@ class WebSocketVersion7(WebSocketLegacy):
                 if len(self._chunks) != 0:
                     raise ProtocolException("Cannot continue a non started message")
 
-                if self._first_opcode == self.OPCODE_TEXT:
-                    self._chunks.extend(payload.decode("utf-8", "replace"))
-                else:
-                    self._chunks.extend(payload)
+                self._chunks.extend(payload)
 
             elif opcode == self.OPCODE_CLOSE:
                 if length >= 2:
@@ -282,7 +278,10 @@ class WebSocketVersion7(WebSocketLegacy):
                 raise Exception("Shouldn't happen")
 
             if fin == 1:
-                msg = ''.join(self._chunks)
+                if self._first_opcode == self.OPCODE_TEXT:
+                    msg = self._chunks.decode("utf-8")
+                else:
+                    msg = self._chunks
 
                 self._first_opcode = False
                 self._chunks = bytearray()
@@ -298,9 +297,10 @@ class WebSocketVersion7(WebSocketLegacy):
         else:
             raise Exception('Invalid encoding')
 
-    def _is_opcode_invalid(self, opcode):
-        return opcode < self.OPCODE_CONTINUATION or (opcode > self.OPCODE_BINARY and
-                opcode < self.OPCODE_CLOSE) or opcode > self.OPCODE_PONG
+    def _is_valid_opcode(self, opcode):
+        return opcode in (self.OPCODE_CONTINUATION, self.OPCODE_TEXT, self.OPCODE_BINARY,
+            self.OPCODE_CLOSE, self.OPCODE_PING, self.OPCODE_PONG)
+
 
     def send(self, message, opcode=OPCODE_TEXT):
         """Send a frame over the websocket with message as its payload
@@ -309,31 +309,64 @@ class WebSocketVersion7(WebSocketLegacy):
         opcode -- the opcode to use (default OPCODE_TEXT)
         """
 
+
         if self.websocket_closed:
             raise Exception('Connection was terminated')
 
-        if self._is_opcode_invalid(opcode):
+        if not self._is_valid_opcode(opcode):
             raise Exception('Invalid opcode %d' % opcode)
 
         if opcode == self.OPCODE_TEXT:
             message = self._encode_text(message)
 
-        length = len(message)
+        # TODO: implement masking
+        # TODO: implement fragmented messages
+        mask_bit = 0
+        fin = 1
+        masking_key = None
+
+        ## +-+-+-+-+-------+
+        ## |F|R|R|R| opcode|
+        ## |I|S|S|S|  (4)  |
+        ## |N|V|V|V|       |
+        ## | |1|2|3|       |
+        ## +-+-+-+-+-------+
+        header = chr(
+            (fin << 7) |
+            (0 << 6) | # RSV1
+            (0 << 5) | # RSV2
+            (0 << 4) | # RSV3
+            opcode
+        )
+
+        ##                 +-+-------------+-------------------------------+
+        ##                 |M| Payload len |    Extended payload length    |
+        ##                 |A|     (7)     |             (16/63)           |
+        ##                 |S|             |   (if payload len==126/127)   |
+        ##                 |K|             |                               |
+        ## +-+-+-+-+-------+-+-------------+ - - - - - - - - - - - - - - - +
+        ## |     Extended payload length continued, if payload len == 127  |
+        ## + - - - - - - - - - - - - - - - +-------------------------------+
+
+        msg_length = len(message)
 
         if opcode == self.OPCODE_TEXT:
-            message = struct.pack('!%ds' % length, message)
+            message = struct.pack('!%ds' % msg_length, message)
 
-        if length < self.LEN_16:
-            preamble = struct.pack('!BB', self.FIN | opcode, length)
-        elif length < 2 ** 16:
-            preamble = struct.pack('!BBH', self.FIN | opcode, self.LEN_16, length)
-        elif length < 2 ** 64:
-            preamble = struct.pack('!BBQ', self.FIN | opcode, self.LEN_64, length)
+        if msg_length < 126:
+            header += chr(mask_bit | msg_length)
+        elif msg_length < (1 << 16):
+            header += chr(mask_bit | 126) + struct.pack('!H', msg_length)
+        elif msg_length < (1 << 63):
+            header += chr(mask_bit | 127) + struct.pack('!Q', msg_length)
         else:
-            # this can't really happen, but for correctness sake...
-            raise Exception('Message is too long')
+            raise FrameTooLargeException()
 
-        self.socket.sendall(preamble + message)
+        if masking_key:
+            self.socket.sendall(str(header + masking_key + mask(message))) # TODO: implement
+        else:
+            self.socket.sendall(header + message)
+
 
     def close(self, reason, message):
         """Close the websocket, sending the specified reason and message

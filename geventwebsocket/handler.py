@@ -69,8 +69,6 @@ class WebSocketHandler(WSGIHandler):
         protocol, version = self.request_version.split("/")
         key = environ.get("HTTP_SEC_WEBSOCKET_KEY")
 
-        print key
-
         # check client handshake for validity
         if not environ.get("REQUEST_METHOD") == "GET":
             # 5.2.1 (1)
@@ -115,7 +113,6 @@ class WebSocketHandler(WSGIHandler):
     def _handle_one_legacy_response(self):
         # In case the client doesn't want to initialize a WebSocket connection
         # we will proceed with the default PyWSGI functionality.
-        print self.environ.get("HTTP_CONNECTION", "").lower().split(",")
 
         if "upgrade" in self.environ.get("HTTP_CONNECTION", "").lower(). \
              replace(" ", "").split(",") and \

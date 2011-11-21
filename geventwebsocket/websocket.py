@@ -72,7 +72,7 @@ class WebSocketLegacy(object):
 
         return ''.join(bytes)
 
-    def wait(self):
+    def receive(self):
         while True:
             if self.websocket_closed:
                 return None
@@ -309,7 +309,6 @@ class WebSocketVersion7(WebSocketLegacy):
         opcode -- the opcode to use (default OPCODE_TEXT)
         """
 
-
         if self.websocket_closed:
             raise Exception('Connection was terminated')
 
@@ -369,8 +368,7 @@ class WebSocketVersion7(WebSocketLegacy):
 
 
     def close(self, reason, message):
-        """Close the websocket, sending the specified reason and message
-        """
+        """Close the websocket, sending the specified reason and message"""
 
         message = self._encode_text(message)
         self.send(struct.pack('!H%ds' % len(message), reason, message), opcode=self.OPCODE_CLOSE)

@@ -295,7 +295,7 @@ class WebSocketVersion7(WebSocketLegacy):
         elif isinstance(s, str):
             return unicode(s).encode('utf-8')
         else:
-            raise Exception('Invalid encoding')
+            raise TypeError('Invalid encoding')
 
     def _is_valid_opcode(self, opcode):
         return opcode in (self.OPCODE_CONTINUATION, self.OPCODE_TEXT, self.OPCODE_BINARY,

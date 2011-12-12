@@ -30,7 +30,7 @@ class WebSocketLegacy(object):
         elif isinstance(message, str):
             message = unicode(message, 'utf-8').encode('utf-8')
         else:
-            raise Exception("Invalid message encoding")
+            raise TypeError("Invalid message encoding")
 
         self.socket.sendall("\x00" + message + "\xFF")
 

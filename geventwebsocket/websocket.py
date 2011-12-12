@@ -34,13 +34,16 @@ class WebSocketHixie(object):
         self.fobj = fobj
         self._write = _get_write(fobj)
 
-    def send(self, message):
-        if isinstance(message, unicode):
-            message = message.encode('utf-8')
-        elif isinstance(message, str):
-            message = unicode(message, 'utf-8').encode('utf-8')
+    def _encode_text(self, s):
+        if isinstance(s, unicode):
+            return s.encode('utf-8')
+        elif isinstance(s, str):
+            return unicode(s).encode('utf-8')
         else:
-            raise TypeError("Invalid message encoding")
+            raise Exception('Invalid encoding')
+
+    def send(self, message):
+        message = self._encode_text(message)
 
         with self._writelock:
             self._write("\x00" + message + "\xFF")

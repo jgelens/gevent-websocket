@@ -81,7 +81,7 @@ class WebSocketHixie(object):
         while True:
             if self.fobj is None:
                 msg = ''.join(bytes)
-                raise WebSocketError('Connenction closed unexpectedly while reading message: %r' % msg)
+                raise WebSocketError('Connection closed unexpectedly while reading message: %r' % msg)
             byte = read(1)
             if ord(byte) != 0xff:
                 bytes.append(byte)

@@ -209,10 +209,10 @@ def reconstruct_url(environ):
 
         if secure:
             if environ['SERVER_PORT'] != '443':
-               url += ':' + environ['SERVER_PORT']
+                url += ':' + environ['SERVER_PORT']
         else:
             if environ['SERVER_PORT'] != '80':
-               url += ':' + environ['SERVER_PORT']
+                url += ':' + environ['SERVER_PORT']
 
     url += quote(environ.get('SCRIPT_NAME', ''))
     url += quote(environ.get('PATH_INFO', ''))

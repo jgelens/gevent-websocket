@@ -24,7 +24,18 @@ class FrameTooLargeException(WebSocketError):
     pass
 
 
-class WebSocketHixie(object):
+class WebSocket(object):
+
+    def _encode_text(self, s):
+        if isinstance(s, unicode):
+            return s.encode('utf-8')
+        elif isinstance(s, str):
+            return s
+        else:
+            raise TypeError("Expected 'unicode' or utf-8-encoded string: %r" % (s, ))
+
+
+class WebSocketHixie(WebSocket):
 
     def __init__(self, fobj, environ):
         self.origin = environ.get('HTTP_ORIGIN')
@@ -33,14 +44,6 @@ class WebSocketHixie(object):
         self._writelock = Semaphore(1)
         self.fobj = fobj
         self._write = _get_write(fobj)
-
-    def _encode_text(self, s):
-        if isinstance(s, unicode):
-            return s.encode('utf-8')
-        elif isinstance(s, str):
-            return unicode(s).encode('utf-8')
-        else:
-            raise Exception('Invalid encoding')
 
     def send(self, message):
         message = self._encode_text(message)
@@ -107,7 +110,7 @@ class WebSocketHixie(object):
                 raise WebSocketError("Received an invalid frame_type=%r" % frame_type)
 
 
-class WebSocketHybi(object):
+class WebSocketHybi(WebSocket):
     FIN = int("10000000", 2)
     RSV = int("01110000", 2)
     OPCODE = int("00001111", 2)
@@ -289,14 +292,6 @@ class WebSocketHybi(object):
                 self._chunks = bytearray()
 
                 return msg
-
-    def _encode_text(self, s):
-        if isinstance(s, unicode):
-            return s.encode('utf-8')
-        elif isinstance(s, str):
-            return unicode(s).encode('utf-8')
-        else:
-            raise TypeError('Invalid encoding')
 
     def _is_valid_opcode(self, opcode):
         return opcode in (self.OPCODE_CONTINUATION, self.OPCODE_TEXT, self.OPCODE_BINARY,

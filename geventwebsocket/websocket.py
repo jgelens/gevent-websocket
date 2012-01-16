@@ -40,6 +40,7 @@ class WebSocketHixie(WebSocket):
         if self.fobj is not None:
             self.fobj.close()
             self.fobj = None
+            self._write = None
 
     def _message_length(self):
         length = 0

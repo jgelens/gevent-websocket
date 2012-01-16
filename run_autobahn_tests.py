@@ -16,21 +16,22 @@ from autobahn.fuzzing import FuzzingClientFactory
 spec = {
    "options": {"failByDrop": False},
    "enable-ssl": False,
-   "servers": [],
-   "cases": ["*"],
-   "exclude-cases": ["7.5.1",
-                     "7.9.3",
-                     "7.9.4",
-                     "7.9.5",
-                     "7.9.6",
-                     "7.9.7",
-                     "7.9.8",
-                     "7.9.9",
-                     "7.9.10",
-                     "7.9.11",
-                     "7.9.12",
-                     "7.9.13"]
-}
+   "servers": []}
+
+
+default_args = ["*",
+         "x7.5.1",
+         "x7.9.3",
+         "x7.9.4",
+         "x7.9.5",
+         "x7.9.6",
+         "x7.9.7",
+         "x7.9.8",
+         "x7.9.9",
+         "x7.9.10",
+         "x7.9.11",
+         "x7.9.12",
+         "x7.9.13"]
 # We ignore 7.5.1 because it checks that close frame has valid utf-8 message
 # we do not validate utf-8.
 
@@ -80,7 +81,20 @@ if __name__ == '__main__':
     parser.add_option('--geventwebsocket', default='examples/echoserver.py')
     parser.add_option('--autobahn', default='../../src/Autobahn/testsuite/websockets/servers/test_autobahn.py')
     options, args = parser.parse_args()
-    assert not args, args
+
+    cases = []
+    exclude_cases = []
+
+    for arg in (args or default_args):
+        if arg.startswith('x'):
+            arg = arg[1:]
+            exclude_cases.append(arg)
+        else:
+            cases.append(arg)
+
+    spec['cases'] = cases
+    spec['exclude-cases'] = exclude_cases
+
     if options.autobahn and not os.path.exists(options.autobahn):
         print 'Ignoring %s (not found)' % options.autobahn
         options.autobahn = None

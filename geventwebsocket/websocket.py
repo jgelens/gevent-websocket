@@ -308,8 +308,15 @@ class WebSocketHybi(WebSocket):
         else:
             raise FrameTooLargeException()
 
-        with self._writelock:
-            self._write(header + message)
+        try:
+            combined = header + message
+        except TypeError:
+            with self._writelock:
+                self._write(header)
+                self._write(message)
+        else:
+            with self._writelock:
+                self._write(combined)
 
     def send(self, message, binary=None):
         """Send a frame over the websocket with message as its payload"""

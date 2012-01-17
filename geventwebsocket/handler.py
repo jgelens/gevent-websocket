@@ -31,14 +31,12 @@ class WebSocketHandler(WSGIHandler):
     def _handle_websocket(self):
         environ = self.environ
         try:
-            try:
-                if environ.get("HTTP_SEC_WEBSOCKET_VERSION"):
-                    result = self._handle_hybi()
-                elif environ.get("HTTP_ORIGIN"):
-                    result = self._handle_hixie()
-            except:
+            if environ.get("HTTP_SEC_WEBSOCKET_VERSION"):
                 self.close_connection = True
-                raise
+                result = self._handle_hybi()
+            elif environ.get("HTTP_ORIGIN"):
+                self.close_connection = True
+                result = self._handle_hixie()
             self.result = []
             if not result:
                 return

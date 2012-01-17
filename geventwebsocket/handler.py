@@ -88,7 +88,7 @@ class WebSocketHandler(WSGIHandler):
             self.respond('400 Bad Request')
             return
 
-        self.websocket = WebSocketHybi(self.rfile, environ)
+        self.websocket = WebSocketHybi(self.socket, environ)
         environ['wsgi.websocket'] = self.websocket
 
         headers = [
@@ -103,7 +103,7 @@ class WebSocketHandler(WSGIHandler):
         environ = self.environ
         assert "upgrade" in self.environ.get("HTTP_CONNECTION", "").lower()
 
-        self.websocket = WebSocketHixie(self.rfile, environ)
+        self.websocket = WebSocketHixie(self.socket, environ)
         environ['wsgi.websocket'] = self.websocket
 
         key1 = self.environ.get('HTTP_SEC_WEBSOCKET_KEY1')

@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python
 """Test gevent-websocket with the test suite of Autobahn
 
     http://www.tavendo.de/autobahn/testsuite.html

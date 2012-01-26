@@ -31,14 +31,12 @@ class WebSocketHandler(WSGIHandler):
     def _handle_websocket(self):
         environ = self.environ
         try:
-            try:
-                if environ.get("HTTP_SEC_WEBSOCKET_VERSION"):
-                    result = self._handle_hybi()
-                elif environ.get("HTTP_ORIGIN"):
-                    result = self._handle_hixie()
-            except:
+            if environ.get("HTTP_SEC_WEBSOCKET_VERSION"):
                 self.close_connection = True
-                raise
+                result = self._handle_hybi()
+            elif environ.get("HTTP_ORIGIN"):
+                self.close_connection = True
+                result = self._handle_hixie()
             self.result = []
             if not result:
                 return
@@ -90,7 +88,7 @@ class WebSocketHandler(WSGIHandler):
             self.respond('400 Bad Request')
             return
 
-        self.websocket = WebSocketHybi(self.rfile, environ)
+        self.websocket = WebSocketHybi(self.socket, environ)
         environ['wsgi.websocket'] = self.websocket
 
         headers = [
@@ -105,7 +103,7 @@ class WebSocketHandler(WSGIHandler):
         environ = self.environ
         assert "upgrade" in self.environ.get("HTTP_CONNECTION", "").lower()
 
-        self.websocket = WebSocketHixie(self.rfile, environ)
+        self.websocket = WebSocketHixie(self.socket, environ)
         environ['wsgi.websocket'] = self.websocket
 
         key1 = self.environ.get('HTTP_SEC_WEBSOCKET_KEY1')

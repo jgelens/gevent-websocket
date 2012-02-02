@@ -19,6 +19,7 @@ class WebSocketHandler(WSGIHandler):
         self.pre_start()
         environ = self.environ
         upgrade = environ.get('HTTP_UPGRADE', '').lower()
+
         if upgrade == 'websocket':
             connection = environ.get('HTTP_CONNECTION', '').lower()
             if 'upgrade' in connection:
@@ -30,6 +31,7 @@ class WebSocketHandler(WSGIHandler):
 
     def _handle_websocket(self):
         environ = self.environ
+
         try:
             if environ.get("HTTP_SEC_WEBSOCKET_VERSION"):
                 self.close_connection = True
@@ -37,9 +39,11 @@ class WebSocketHandler(WSGIHandler):
             elif environ.get("HTTP_ORIGIN"):
                 self.close_connection = True
                 result = self._handle_hixie()
+
             self.result = []
             if not result:
                 return
+
             self.application(environ, None)
             return []
         finally:
@@ -152,6 +156,7 @@ class WebSocketHandler(WSGIHandler):
                 ("Connection", "Upgrade"),
                 ("WebSocket-Location", reconstruct_url(environ)),
             ]
+
             if self.websocket.protocol is not None:
                 headers.append(("WebSocket-Protocol", self.websocket.protocol))
             if self.websocket.origin:
@@ -176,6 +181,7 @@ class WebSocketHandler(WSGIHandler):
     def respond(self, status, headers=[]):
         self.close_connection = True
         self._send_reply(status, headers)
+
         if self.socket is not None:
             try:
                 self.socket._sock.close()
@@ -214,6 +220,8 @@ def reconstruct_url(environ):
 
     url += quote(environ.get('SCRIPT_NAME', ''))
     url += quote(environ.get('PATH_INFO', ''))
+
     if environ.get('QUERY_STRING'):
         url += '?' + environ['QUERY_STRING']
+
     return url

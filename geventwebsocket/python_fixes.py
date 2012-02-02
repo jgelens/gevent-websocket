@@ -1,3 +1,6 @@
+import sys
+
+
 if sys.version_info[:2] == (2, 7):
     # Python 2.7 has a working BufferedReader but socket.makefile() does not
     # use it.

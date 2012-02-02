@@ -57,7 +57,10 @@ class WebSocketHandler(WSGIHandler):
 
         if version not in self.SUPPORTED_VERSIONS:
             self.log_error('400: Unsupported Version: %r', version)
-            self.respond('400 Unsupported Version', [('Sec-WebSocket-Version', '13, 8, 7')])
+            self.respond(
+                '400 Unsupported Version',
+                [('Sec-WebSocket-Version', '13, 8, 7')]
+            )
             return
 
         protocol, version = self.request_version.split("/")

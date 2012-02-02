@@ -6,50 +6,71 @@ gevent-websocket
 written written and maintained by `Jeffrey Gelens`_ It is licensed under the BSD license.
 
 Installation
-------------------------
+------------
 
-Install Python 2.4 or newer and gevent and its dependencies. The latest release
-can be download from PyPi_ or by cloning the repository_.
+Install Python 2.5 or newer and Gevent and its dependencies. The latest release
+can be download from PyPi_ or by cloning the repository_ and running::
+
+    $ python setup.py install
+
+The easiest way to install gevent-websocket is directly from PyPi_ using pip or
+setuptools by running the commands below::
+
+    $ pip install gevent-websocket
+
+or::
+
+    $ easy_install gevent-websocket
+
+This also installs the dependencies automatically.
+
 
 Usage
 -----
 
-Native Gevent
+Gevent Server
 ^^^^^^^^^^^^^
 
 At the moment gevent-websocket has one handler based on the Pywsgi gevent
-server. Set the `handler_class` when creating a pywsgi server instance to make
-use of the Websocket functionality:
+Hook up the WebSocketHandler to the Pywsgi Server by setting the `handler_class`
+when creating the server instance.
 
 ::
 
     from gevent import pywsgi
     from geventwebsocket.handler import WebSocketHandler
 
-    server = pywsgi.WSGIServer(('127.0.0.1', 8000), websocket_app,
+    server = pywsgi.WSGIServer(("", 8000), websocket_app,
         handler_class=WebSocketHandler)
     server.serve_forever()
 
-Afterwards write a WSGI application with a 3rd parameter, namely a websocket instance:
+The handler enhances your WSGI app with a Websocket environment variable when the
+browser requests a Websocket connection.
 
 ::
 
     def websocket_app(environ, start_response):
         if environ["PATH_INFO"] == '/echo':
             ws = environ["wsgi.websocket"]
-            message = ws.wait()
+            message = ws.receive()
             ws.send(message)
 
-Gunicorn
-^^^^^^^^
+Gunicorn Server
+^^^^^^^^^^^^^^^
 
 Using Gunicorn it is even more easy to start a server. Only the
-websocket_app from the previous example is required to start the server.
-Start Gunicorn using the following command and worker class:
+`websocket_app` from the previous example is required to start the server.
+Start Gunicorn using the following command and worker class to enable Websocket
+funtionality for the application.
 
 ::
 
-    gunicorn -k "geventwebsocket.gunicorn.workers.GeventWebSocketWorker" gunicorn_websocket:websocket_app
+    gunicorn -k "geventwebsocket.gunicorn.workers.GeventWebSocketWorker" wsgi:websocket_app
+
+Backwards incompatible changes
+------------------------------
+
+- The `wait()` method was renamed to `receive()`.
 
 .. _gevent-websocket: http://www.bitbucket.org/Jeffrey/gevent-websocket/
 .. _gevent: http://www.gevent.org/

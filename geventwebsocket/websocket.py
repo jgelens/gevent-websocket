@@ -1,4 +1,3 @@
-import sys
 import struct
 
 from errno import EINTR
@@ -9,21 +8,20 @@ from exceptions import FrameTooLargeException, WebSocketError
 
 
 class WebSocket(object):
-    def _encode_text(self, s):
-        if isinstance(s, unicode):
-            return s.encode('utf-8')
+    def _encode_text(self, text):
+        if isinstance(text, unicode):
+            return text.encode('utf-8')
         else:
-            return s
+            return text
 
 
 class WebSocketHixie(WebSocket):
-
     def __init__(self, socket, environ):
         self.origin = environ.get('HTTP_ORIGIN')
         self.protocol = environ.get('HTTP_SEC_WEBSOCKET_PROTOCOL')
         self.path = environ.get('PATH_INFO')
-        self._writelock = Semaphore(1)
         self.fobj = socket.makefile()
+        self._writelock = Semaphore(1)
         self._write = socket.sendall
 
     def send(self, message):
@@ -43,7 +41,7 @@ class WebSocketHixie(WebSocket):
 
         while True:
             if self.fobj is None:
-                raise WebSocketError('Connenction closed unexpectedly while reading message length')
+                raise WebSocketError('Connection closed unexpectedly while reading message length')
             byte_str = self.fobj.read(1)
 
             if not byte_str:
@@ -67,6 +65,7 @@ class WebSocketHixie(WebSocket):
             if self.fobj is None:
                 msg = ''.join(bytes)
                 raise WebSocketError('Connection closed unexpectedly while reading message: %r' % msg)
+
             byte = read(1)
             if ord(byte) != 0xff:
                 bytes.append(byte)
@@ -77,8 +76,10 @@ class WebSocketHixie(WebSocket):
 
     def receive(self):
         read = self.fobj.read
+
         while self.fobj is not None:
             frame_str = read(1)
+
             if not frame_str:
                 self.close()
                 return
@@ -171,8 +172,10 @@ class WebSocketHybi(WebSocket):
 
         assert not self._reading, 'Reading is not possible from multiple greenlets'
         self._reading = True
+
         try:
             data0 = read(2)
+
             if not data0:
                 self._close()
                 return
@@ -187,16 +190,20 @@ class WebSocketHybi(WebSocket):
                 data1 = ''
             elif length == 126:
                 data1 = read(2)
+
                 if len(data1) != 2:
                     self.close()
                     raise WebSocketError('Incomplete read while reading 2-byte length: %r' % (data0 + data1))
+
                 length = struct.unpack('!H', data1)[0]
             else:
                 assert length == 127, length
                 data1 = read(8)
+
                 if len(data1) != 8:
                     self.close()
                     raise WebSocketError('Incomplete read while reading 8-byte length: %r' % (data0 + data1))
+
                 length = struct.unpack('!Q', data1)[0]
 
             mask = read(4)
@@ -217,6 +224,7 @@ class WebSocketHybi(WebSocket):
 
             if payload:
                 payload = bytearray(payload)
+
                 for i in xrange(len(payload)):
                     payload[i] = payload[i] ^ mask[i % 4]
 
@@ -228,8 +236,10 @@ class WebSocketHybi(WebSocket):
 
     def _receive(self):
         """Return the next text or binary message from the socket."""
+
         opcode = None
         result = bytearray()
+
         while True:
             frame = self.receive_frame()
             if frame is None:
@@ -286,6 +296,7 @@ class WebSocketHybi(WebSocket):
         result = self._receive()
         if not result:
             return result
+
         message, is_binary = result
         if is_binary:
             return message
@@ -348,5 +359,6 @@ class WebSocketHybi(WebSocket):
             self._write = None
             fobj = self.fobj
             self.fobj = None
+
             if not self._reading:
                 fobj.close()

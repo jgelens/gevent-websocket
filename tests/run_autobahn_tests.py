@@ -78,7 +78,7 @@ class ProcessPool(object):
 if __name__ == '__main__':
     import optparse
     parser = optparse.OptionParser()
-    parser.add_option('--geventwebsocket', default='examples/echoserver.py')
+    parser.add_option('--geventwebsocket', default='../examples/echoserver.py')
     parser.add_option('--autobahn', default='../../src/Autobahn/testsuite/websockets/servers/test_autobahn.py')
     options, args = parser.parse_args()
 

@@ -309,6 +309,10 @@ class WebSocketHybi(WebSocket):
 
     def send_frame(self, message, opcode):
         """Send a frame over the websocket with message as its payload"""
+
+        if self.socket is None:
+            raise WebSocketError('The connection was closed')
+
         header = chr(0x80 | opcode)
 
         if isinstance(message, unicode):
@@ -354,11 +358,10 @@ class WebSocketHybi(WebSocket):
 
     def _close(self):
         if self.socket is not None:
-            self.socket._sock.close()
             self.socket = None
             self._write = None
-            fobj = self.fobj
-            self.fobj = None
 
             if not self._reading:
-                fobj.close()
+                self.fobj.close()
+
+            self.fobj = None

@@ -42,10 +42,12 @@ if sys.version_info[:2] == (2, 7):
                 return -1
 
         def close(self):
-            if self.closed:
+            if self._sock is None:
                 return
-            RawIOBase.close(self)
-            self._sock = None
+            else:
+                self._sock.close()
+                self._sock = None
+                RawIOBase.close(self)
 
     def makefile(socket):
         return BufferedReader(SocketIO(socket))

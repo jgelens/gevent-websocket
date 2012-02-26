@@ -106,13 +106,13 @@ if __name__ == '__main__':
             pool.spawn([sys.executable, options.autobahn])
         pool.wait(1)
         if options.geventwebsocket:
-            agent = urllib2.urlopen('http://127.0.0.1:7000/version').read().strip()
+            agent = urllib2.urlopen('http://127.0.0.1:8000/version').read().strip()
             assert agent and '\n' not in agent and 'gevent-websocket' in agent, agent
-            spec['servers'].append({"url": "ws://localhost:7000",
+            spec['servers'].append({"url": "ws://localhost:8000",
                                     "agent": agent,
                                     "options": {"version": 17}})
         if options.autobahn:
-            spec['servers'].append({'url': 'ws://localhost:9000/',
+            spec['servers'].append({'url': 'ws://localhost:8000/',
                                     'agent': 'AutobahnServer',
                                     'options': {'version': 17}})
         log.startLogging(sys.stdout)

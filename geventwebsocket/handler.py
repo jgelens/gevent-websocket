@@ -10,7 +10,18 @@ from geventwebsocket.websocket import WebSocketHybi, WebSocketHixie
 
 
 class WebSocketHandler(WSGIHandler):
-    """ Automatically upgrades the connection to websockets. """
+    """Automatically upgrades the connection to websockets.
+    
+    To prevent the WebSocketHandler to call the underlying WSGI application,
+    but only setup the WebSocket negotiations, do:
+
+      mywebsockethandler.prevent_wsgi_call = True
+
+    before calling handle_one_response().  This is useful if you want to do
+    more things before calling the app, and want to off-load the WebSocket
+    negotiations to this library.  Socket.IO needs this for example, to
+    send the 'ack' before yielding the control to your WSGI app.
+    """
 
     GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
     SUPPORTED_VERSIONS = ('13', '8', '7')
@@ -47,7 +58,8 @@ class WebSocketHandler(WSGIHandler):
             if not result:
                 return
 
-            self.application(environ, self._fake_start_response)
+            if not hasattr(self, 'prevent_wsgi_call'):
+                self.application(environ, self._fake_start_response)
             return []
         finally:
             self.log_request()

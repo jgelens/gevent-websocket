@@ -1,0 +1,5 @@
+recursive-include examples *
+include LICENSE
+include AUTHORS
+include README.rst
+include MANIFEST.in

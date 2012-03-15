@@ -1,4 +1,4 @@
-version_info = (0, 3, 3)
+version_info = (0, 3, 4)
 __version__ = ".".join(map(str, version_info))
 
 __all__ = ['WebSocketHandler', 'WebSocketError']

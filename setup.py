@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name="gevent-websocket",
-    version="0.3.5",
+    version="0.3.6",
     description="Websocket handler for the gevent pywsgi server, a Python network library",
     long_description=open("README.rst").read(),
     author="Jeffrey Gelens",

@@ -1,5 +1,6 @@
 recursive-include examples *
 include LICENSE
 include AUTHORS
+include CHANGELOG
 include README.rst
 include MANIFEST.in

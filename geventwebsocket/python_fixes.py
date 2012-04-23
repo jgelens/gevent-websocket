@@ -1,4 +1,6 @@
 import sys
+from errno import EINTR
+from socket import error as socket_error
 
 
 if sys.version_info[:2] == (2, 7):

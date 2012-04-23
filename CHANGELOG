@@ -1,0 +1,4 @@
+Version 0.3.5
+-------------
+
+Added missing Gunicorn worker

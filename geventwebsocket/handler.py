@@ -158,7 +158,7 @@ class WebSocketHandler(WSGIHandler):
             if self.websocket.origin:
                 headers.append(("Sec-WebSocket-Origin", self.websocket.origin))
 
-            self._send_reply("101 Web Socket Protocol Handshake", headers)
+            self._send_reply("101 WebSocket Protocol Handshake", headers)
 
             # This request should have 8 bytes of data in the body
             key3 = self.rfile.read(8)

@@ -1,7 +1,7 @@
 #!/usr/bin/env python
-"""Test gevent-websocket with the test suite of Autobahn
-
-    http://www.tavendo.de/autobahn/testsuite.html
+"""
+Test gevent-websocket with the test suite of Autobahn
+http://autobahn.ws/testsuite
 """
 import sys
 import os
@@ -10,7 +10,7 @@ import time
 import urllib2
 from twisted.python import log
 from twisted.internet import reactor
-from autobahn.fuzzing import FuzzingClientFactory
+from autobahntestsuite.fuzzing import FuzzingClientFactory
 
 
 spec = {
@@ -98,13 +98,17 @@ if __name__ == '__main__':
     if options.autobahn and not os.path.exists(options.autobahn):
         print 'Ignoring %s (not found)' % options.autobahn
         options.autobahn = None
+
     pool = ProcessPool()
+
     try:
         if options.geventwebsocket:
             pool.spawn([sys.executable, options.geventwebsocket])
         if options.autobahn:
             pool.spawn([sys.executable, options.autobahn])
+
         pool.wait(1)
+
         if options.geventwebsocket:
             agent = urllib2.urlopen('http://127.0.0.1:8000/version').read().strip()
             assert agent and '\n' not in agent and 'gevent-websocket' in agent, agent
@@ -115,6 +119,7 @@ if __name__ == '__main__':
             spec['servers'].append({'url': 'ws://localhost:8000/',
                                     'agent': 'AutobahnServer',
                                     'options': {'version': 17}})
+
         log.startLogging(sys.stdout)
         FuzzingClientFactory(spec)
         reactor.run()

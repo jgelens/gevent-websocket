@@ -4,3 +4,4 @@ syntax: glob
 *.sw?
 gevent_websocket.egg-info/*
 tests/testresults.sqlite3
+.vfenv

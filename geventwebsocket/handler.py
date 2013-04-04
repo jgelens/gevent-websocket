@@ -11,7 +11,7 @@ from geventwebsocket.websocket import WebSocketHybi, WebSocketHixie
 
 class WebSocketHandler(WSGIHandler):
     """Automatically upgrades the connection to websockets.
-    
+
     To prevent the WebSocketHandler to call the underlying WSGI application,
     but only setup the WebSocket negotiations, do:
 
@@ -60,6 +60,7 @@ class WebSocketHandler(WSGIHandler):
 
             if not hasattr(self, 'prevent_wsgi_call'):
                 self.application(environ, self._fake_start_response)
+
             return []
         finally:
             self.log_request()
@@ -113,9 +114,13 @@ class WebSocketHandler(WSGIHandler):
         self.websocket = WebSocketHybi(self.socket, environ)
         environ['wsgi.websocket'] = self.websocket
 
+        # TODO: just echo the protocols for now
+        ws_protocols = environ.get("HTTP_SEC_WEBSOCKET_PROTOCOL", "")
+
         headers = [
             ("Upgrade", "websocket"),
             ("Connection", "Upgrade"),
+            ("Sec-WebSocket-Protocol", ws_protocols),
             ("Sec-WebSocket-Accept", base64.b64encode(sha1(key + self.GUID).digest())),
         ]
         self._send_reply("101 Switching Protocols", headers)
@@ -243,3 +248,27 @@ def reconstruct_url(environ):
         url += '?' + environ['QUERY_STRING']
 
     return url
+
+
+class MessageHandler(object):
+    def __init__(self, environ, interfaces):
+        self.ws = environ['wsgi.websocket']
+        self.interfaces = interfaces
+
+        if self.ws.path in interfaces.keys():
+            self.active_interface = interfaces[self.ws.path]
+        else:
+            raise Exception("no interface found")
+
+        self.on_open()
+        self._handle()
+
+    def _handle(self):
+        while True:
+            message = self.ws.receive()
+
+            if message is None:
+                self.active_interface.on_close()
+                break
+            else:
+                self.active_interface.on_message(message)

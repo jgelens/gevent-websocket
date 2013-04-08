@@ -9,12 +9,8 @@
 	var iets = "";
 	window.onload = function() {
 		var data = {};
-		try {
-			var s = new WebSocket("ws://localhost:8000/data");
-		}
-		catch (e) {
-			var s = new MozWebSocket("ws://localhost:8000/data");
-		}
+        var s = new WebSocket("ws://localhost:8000/data");
+
 		s.onopen = function() {
 			s.send('hi');
 		};

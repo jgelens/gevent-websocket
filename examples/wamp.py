@@ -14,8 +14,9 @@ class AdditionServer(WampProtocol):
         self.register_procedure("http://localhost:8000/calc#add", self.add)
         self.register_object("http://localhost:8000/test#", RPCTestClass)
 
-    def add(self, x, y):
-        return x + y
+    def add(self, var, has):
+        has.update({'bloep': var})
+        return has
 
 
 def app(environ, start_response):

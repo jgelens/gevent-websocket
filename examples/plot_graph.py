@@ -9,13 +9,17 @@ Or with an Gunicorn wrapper:
         plot_graph:app
 """
 
+
 import gevent
-import os
+import logging
 import random
 
-from gevent import pywsgi
-from geventwebsocket.handler import WebSocketHandler
+from geventwebsocket.server import WebSocketServer
 
+
+logger = logging.getLogger(__name__)
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
 
 def handle(ws):
     """
@@ -48,6 +52,5 @@ def app(environ, start_response):
 
 
 if __name__ == "__main__":
-    server = pywsgi.WSGIServer(("", 8000), app,
-        handler_class=WebSocketHandler)
+    server = WebSocketServer(('', 8000), app, debug=True)
     server.serve_forever()

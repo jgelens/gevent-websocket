@@ -38,4 +38,4 @@ path = os.path.dirname(geventwebsocket.__file__)
 agent = "gevent-websocket/%s" % (geventwebsocket.__version__)
 
 print "Running %s from %s" % (agent, path)
-WebSocketServer(("", 8000), echo_app, debug=True).serve_forever()
+WebSocketServer(("", 8000), echo_app, debug=False).serve_forever()

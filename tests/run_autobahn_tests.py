@@ -4,7 +4,6 @@ Test gevent-websocket with the test suite of Autobahn
 http://autobahn.ws/testsuite
 """
 import sys
-import os
 import subprocess
 import time
 import urllib2
@@ -12,26 +11,13 @@ from twisted.python import log
 from twisted.internet import reactor
 from autobahntestsuite.fuzzing import FuzzingClientFactory
 
-
 spec = {
    "options": {"failByDrop": False},
    "enable-ssl": False,
    "servers": []}
 
 
-default_args = ["*",
-         "x7.5.1",
-         "x7.9.3",
-         "x7.9.4",
-         "x7.9.5",
-         "x7.9.6",
-         "x7.9.7",
-         "x7.9.8",
-         "x7.9.9",
-         "x7.9.10",
-         "x7.9.11",
-         "x7.9.12",
-         "x7.9.13"]
+default_args = ['*']
 # We ignore 7.5.1 because it checks that close frame has valid utf-8 message
 # we do not validate utf-8.
 
@@ -78,9 +64,9 @@ if __name__ == '__main__':
     import optparse
     parser = optparse.OptionParser()
     parser.add_option('--geventwebsocket', default='../examples/echoserver.py')
-    parser.add_option('--autobahn', default='../../src/Autobahn/testsuite/websockets/servers/test_autobahn.py')
     options, args = parser.parse_args()
 
+    # Load cases
     cases = []
     exclude_cases = []
 
@@ -94,33 +80,28 @@ if __name__ == '__main__':
     spec['cases'] = cases
     spec['exclude-cases'] = exclude_cases
 
-    if options.autobahn and not os.path.exists(options.autobahn):
-        print 'Ignoring %s (not found)' % options.autobahn
-        options.autobahn = None
-
     pool = ProcessPool()
 
     try:
         if options.geventwebsocket:
             pool.spawn([sys.executable, options.geventwebsocket])
-        if options.autobahn:
-            pool.spawn([sys.executable, options.autobahn])
 
         pool.wait(1)
 
         if options.geventwebsocket:
             agent = urllib2.urlopen('http://127.0.0.1:8000/version').read().strip()
+
             assert agent and '\n' not in agent and 'gevent-websocket' in agent, agent
+
             spec['servers'].append({"url": "ws://localhost:8000",
                                     "agent": agent,
-                                    "options": {"version": 17}})
-        if options.autobahn:
-            spec['servers'].append({'url': 'ws://localhost:8000/',
-                                    'agent': 'AutobahnServer',
-                                    'options': {'version': 17}})
+                                    "options": {"version": 18}})
 
         log.startLogging(sys.stdout)
+
+        # Start testing the server using the FuzzingClient
         FuzzingClientFactory(spec)
+
         reactor.run()
     finally:
         pool.kill()

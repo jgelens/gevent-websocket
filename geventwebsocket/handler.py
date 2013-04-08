@@ -191,6 +191,40 @@ class WebSocketHandler(WSGIHandler):
 
         return self.server.logger
 
+    def start_response(self, status, headers, exc_info=None):
+        """
+        Called when the handler is ready to send a response back to the remote
+        endpoint. A websocket connection may have not been created.
+        """
+        writer = super(WebSocketHandler, self).start_response(
+            status, headers, exc_info=exc_info)
+
+        self._prepare_response()
+
+        return writer
+
+    def _prepare_response(self):
+        """
+        Sets up the ``pywsgi.Handler`` to work with a websocket response.
+
+        This is used by other projects that need to support WebSocket connections
+        as part of a larger effort.
+        """
+        assert not self.headers_sent
+
+        if not self.environ.get('wsgi.websocket'):
+            # a WebSocket connection is not established, do nothing
+            return
+
+        # so that `finalize_headers` doesn't write a Content-Length header
+        self.provided_content_length = False
+        # the websocket is now controlling the response
+        self.response_use_chunked = False
+        # once the request is over, the connection must be closed
+        self.close_connection = True
+        # prevents the Date header from being written
+        self.provided_date = True
+
 
 
 #class MessageHandler(object):
@@ -215,3 +249,4 @@ class WebSocketHandler(WSGIHandler):
 #                break
 #            else:
 #                self.active_interface.on_message(message)
+

@@ -1,368 +1,482 @@
 import struct
 
-from errno import EINTR
-from gevent.coros import Semaphore
+from socket import error
 
-from python_fixes import makefile, is_closed
-from exceptions import FrameTooLargeException, WebSocketError
+from .exceptions import ProtocolError
+from .exceptions import WebSocketError
+from .exceptions import FrameTooLargeException
 
 
 class WebSocket(object):
-    def _encode_text(self, text):
-        if isinstance(text, unicode):
-            return text.encode('utf-8')
-        else:
-            return text
+    """
+    Base class for supporting websocket operations.
 
+    :ivar environ: The http environment referenced by this connection.
+    :ivar closed: Whether this connection is closed/closing.
+    :ivar stream: The underlying file like object that will be read from /
+        written to by this WebSocket object.
+    """
 
-class WebSocketHixie(WebSocket):
-    def __init__(self, socket, environ):
-        self.origin = environ.get('HTTP_ORIGIN')
-        self.protocol = environ.get('HTTP_SEC_WEBSOCKET_PROTOCOL')
-        self.path = environ.get('PATH_INFO')
-        self.fobj = socket.makefile()
-        self.socket = socket
-        self._writelock = Semaphore(1)
-        self._write = socket.sendall
+    __slots__ = ('environ', 'closed', 'stream', 'raw_write', 'raw_read')
 
-    def send(self, message):
-        message = self._encode_text(message)
+    OPCODE_CONTINUATION = 0x00
+    OPCODE_TEXT = 0x01
+    OPCODE_BINARY = 0x02
+    OPCODE_CLOSE = 0x08
+    OPCODE_PING = 0x09
+    OPCODE_PONG = 0x0a
 
-        with self._writelock:
-            self._write("\x00" + message + "\xFF")
+    def __init__(self, environ, stream):
+        self.environ = environ
+        self.closed = False
 
-    def close(self):
-        if self.fobj is not None:
-            self.fobj.close()
-            self.fobj = None
-            self._write = None
+        self.stream = stream
 
-    def _message_length(self):
-        length = 0
+        self.raw_write = stream.write
+        self.raw_read = stream.read
 
-        while True:
-            if self.fobj is None:
-                raise WebSocketError('Connection closed unexpectedly while reading message length')
-            byte_str = self.fobj.read(1)
+    def __del__(self):
+        try:
+            self.close()
+        except:
+            # close() may fail if __init__ didn't complete
+            pass
 
-            if not byte_str:
-                return 0
-            else:
-                byte = ord(byte_str)
+    def _decode_bytes(self, bytestring):
+        """
+        Internal method used to convert the utf-8 encoded bytestring into
+        unicode.
 
-            if byte != 0x00:
-                length = length * 128 + (byte & 0x7f)
-                if (byte & 0x80) != 0x80:
-                    break
+        If the conversion fails, the socket will be closed.
+        """
 
-        return length
-
-    def _read_until(self):
-        bytes = []
-
-        read = self.fobj.read
-
-        while True:
-            if self.fobj is None:
-                msg = ''.join(bytes)
-                raise WebSocketError('Connection closed unexpectedly while reading message: %r' % msg)
-
-            byte = read(1)
-            if ord(byte) != 0xff:
-                bytes.append(byte)
-            else:
-                break
-
-        return ''.join(bytes)
-
-    def receive(self):
-        read = self.fobj.read
-
-        while self.fobj is not None:
-            frame_str = read(1)
-
-            if not frame_str:
-                self.close()
-                return
-            else:
-                frame_type = ord(frame_str)
-
-            if frame_type == 0x00:
-                bytes = self._read_until()
-                return bytes.decode("utf-8", "replace")
-            else:
-                raise WebSocketError("Received an invalid frame_type=%r" % frame_type)
-
-
-class WebSocketHybi(WebSocket):
-    OPCODE_TEXT = 0x1
-    OPCODE_BINARY = 0x2
-    OPCODE_CLOSE = 0x8
-    OPCODE_PING = 0x9
-    OPCODE_PONG = 0xA
-
-    def __init__(self, socket, environ):
-        self.origin = environ.get('HTTP_SEC_WEBSOCKET_ORIGIN')
-        self.protocol = environ.get('HTTP_SEC_WEBSOCKET_PROTOCOL', 'unknown')
-        self.path = environ.get('PATH_INFO')
-        self._chunks = bytearray()
-        self._writelock = Semaphore(1)
-        self.socket = socket
-        self._write = socket.sendall
-        self.fobj = makefile(socket)
-        self.close_code = None
-        self.close_message = None
-        self._reading = False
-
-    def _parse_header(self, data):
-        if len(data) != 2:
-            self._close()
-            raise WebSocketError('Incomplete read while reading header: %r' % data)
-
-        first_byte, second_byte = struct.unpack('!BB', data)
-
-        fin = (first_byte >> 7) & 1
-        rsv1 = (first_byte >> 6) & 1
-        rsv2 = (first_byte >> 5) & 1
-        rsv3 = (first_byte >> 4) & 1
-        opcode = first_byte & 0xf
-
-        # frame-fin = %x0 ; more frames of this message follow
-        #           / %x1 ; final frame of this message
-
-        # frame-rsv1 = %x0 ; 1 bit, MUST be 0 unless negotiated otherwise
-        # frame-rsv2 = %x0 ; 1 bit, MUST be 0 unless negotiated otherwise
-        # frame-rsv3 = %x0 ; 1 bit, MUST be 0 unless negotiated otherwise
-        if rsv1 or rsv2 or rsv3:
-            self.close(1002)
-            raise WebSocketError('Received frame with non-zero reserved bits: %r' % str(data))
-
-        if opcode > 0x7 and fin == 0:
-            self.close(1002)
-            raise WebSocketError('Received fragmented control frame: %r' % str(data))
-
-        if len(self._chunks) > 0 and fin == 0 and not opcode:
-            self.close(1002)
-            raise WebSocketError('Received new fragment frame with non-zero opcode: %r' % str(data))
-
-        if len(self._chunks) > 0 and fin == 1 and (self.OPCODE_TEXT <= opcode <= self.OPCODE_BINARY):
-            self.close(1002)
-            raise WebSocketError('Received new unfragmented data frame during fragmented message: %r' % str(data))
-
-        has_mask = (second_byte >> 7) & 1
-        length = (second_byte) & 0x7f
-
-        # Control frames MUST have a payload length of 125 bytes or less
-        if opcode > 0x7 and length > 125:
-            self.close(1002)
-            raise FrameTooLargeException("Control frame payload cannot be larger than 125 bytes: %r" % str(data))
-
-        return fin, opcode, has_mask, length
-
-    def receive_frame(self):
-        """Return the next frame from the socket."""
-        fobj = self.fobj
-
-        if fobj is None:
-            return
-
-        if is_closed(fobj):
-            return
-
-        read = self.fobj.read
-
-        assert not self._reading, 'Reading is not possible from multiple greenlets'
-        self._reading = True
+        if not bytestring:
+            return u''
 
         try:
-            data0 = read(2)
+            return bytestring.decode('utf-8')
+        except UnicodeDecodeError:
+            self.close(1007)
 
-            if not data0:
-                self._close()
-                return
+            raise
 
-            fin, opcode, has_mask, length = self._parse_header(data0)
+    def _encode_bytes(self, text):
+        """
+        :returns: The utf-8 byte string equivalent of `text`.
+        """
 
-            if not has_mask and length:
-                self.close(1002)
-                raise WebSocketError('Message from client is not masked')
+        if isinstance(text, str):
+            return text
 
-            if length < 126:
-                data1 = ''
-            elif length == 126:
-                data1 = read(2)
+        if not isinstance(text, unicode):
+            text = unicode(text or '')
 
-                if len(data1) != 2:
-                    self.close()
-                    raise WebSocketError('Incomplete read while reading 2-byte length: %r' % (data0 + data1))
+        return text.encode('utf-8')
 
-                length = struct.unpack('!H', data1)[0]
-            else:
-                assert length == 127, length
-                data1 = read(8)
+    def is_valid_close_code(self, code):
+        """
+        :returns: Whether the returned close code is a valid hybi return code.
+        """
+        if code < 1000:
+            return False
 
-                if len(data1) != 8:
-                    self.close()
-                    raise WebSocketError('Incomplete read while reading 8-byte length: %r' % (data0 + data1))
+        if 1004 <= code <= 1006:
+            return False
 
-                length = struct.unpack('!Q', data1)[0]
+        if 1012 <= code <= 1016:
+            return False
 
-            mask = read(4)
-            if len(mask) != 4:
-                self._close()
-                raise WebSocketError('Incomplete read while reading mask: %r' % (data0 + data1 + mask))
+        if code == 1100:
+            # not sure about this one but the autobahn fuzzer requires it.
+            return False
 
-            mask = struct.unpack('!BBBB', mask)
+        if 2000 <= code <= 2999:
+            return False
 
-            if length:
-                payload = read(length)
-                if len(payload) != length:
-                    self._close()
-                    args = (length, len(payload))
-                    raise WebSocketError('Incomplete read: expected message of %s bytes, got %s bytes' % args)
-            else:
-                payload = ''
+        return True
 
-            if payload:
-                payload = bytearray(payload)
+    @property
+    def origin(self):
+        if not self.environ:
+            return
 
-                for i in xrange(len(payload)):
-                    payload[i] = payload[i] ^ mask[i % 4]
+        return self.environ.get('HTTP_ORIGIN')
 
-            return fin, opcode, payload
-        finally:
-            self._reading = False
-            if self.fobj is None:
-                fobj.close()
+    @property
+    def protocol(self):
+        if not self.environ:
+            return
 
-    def _receive(self):
-        """Return the next text or binary message from the socket."""
+        return self.environ.get('HTTP_SEC_WEBSOCKET_PROTOCOL')
 
+    @property
+    def version(self):
+        if not self.environ:
+            return
+
+        return self.environ.get('HTTP_SEC_WEBSOCKET_VERSION')
+
+    @property
+    def path(self):
+        if not self.environ:
+            return
+
+        return self.environ.get('PATH_INFO')
+
+    def handle_close(self, header, payload):
+        """
+        Called when a close frame has been decoded from the stream.
+
+        :param header: The decoded `Header`.
+        :param payload: The bytestring payload associated with the close frame.
+        """
+        if not payload:
+            self.close(1000, None)
+
+            return
+
+        if len(payload) < 2:
+            raise ProtocolError('Invalid close frame: {0} {1}'.format(
+                header, payload))
+
+        code = struct.unpack('!H', str(payload[:2]))[0]
+        payload = payload[2:]
+
+        if payload:
+            payload = self._decode_bytes(payload)
+
+        if not self._is_valid_close_code(code):
+            raise ProtocolError('Invalid close code {0}'.format(code))
+
+        self.close(code, payload)
+
+    def handle_ping(self, header, payload):
+        self.send_frame(payload, self.OPCODE_PONG)
+
+    def handle_pong(self, header, payload):
+        pass
+
+    def read_frame(self):
+        """
+        Block until a full frame has been read from the socket.
+
+        This is an internal method as calling this will not cleanup correctly
+        if an exception is called. Use `receive` instead.
+
+        :return: The header and payload as a tuple.
+        """
+        header = Header.decode_header(self.stream)
+
+        if header.flags:
+            raise ProtocolError
+
+        if not header.length:
+            return header, ''
+
+        try:
+            payload = self.raw_read(header.length)
+        except error:
+            payload = ''
+        except Exception:
+            # TODO log out this exception
+            payload = ''
+
+        if len(payload) != header.length:
+            raise WebSocketError('Unexpected EOF reading frame payload')
+
+        if header.mask:
+            payload = header.unmask_payload(payload)
+
+        return header, payload
+
+    def read_message(self):
+        """
+        Return the next text or binary message from the socket.
+
+        This is an internal method as calling this will not cleanup correctly
+        if an exception is called. Use `receive` instead.
+        """
         opcode = None
-        result = bytearray()
+        message = ""
 
         while True:
-            frame = self.receive_frame()
-            if frame is None:
-                if result:
-                    raise WebSocketError('Peer closed connection unexpectedly')
-                return
-
-            f_fin, f_opcode, f_payload = frame
+            header, payload = self.read_frame()
+            f_opcode = header.opcode
 
             if f_opcode in (self.OPCODE_TEXT, self.OPCODE_BINARY):
-                if opcode is None:
-                    opcode = f_opcode
-                else:
-                    raise WebSocketError('The opcode in non-fin frame is expected to be zero, got %r' % (f_opcode, ))
-            elif not f_opcode:
-                if opcode is None:
-                    self.close(1002)
-                    raise WebSocketError('Unexpected frame with opcode=0')
-            elif f_opcode == self.OPCODE_CLOSE:
-                if len(f_payload) >= 2:
-                    self.close_code = struct.unpack('!H', str(f_payload[:2]))[0]
-                    self.close_message = f_payload[2:]
-                elif f_payload:
-                    self._close()
-                    raise WebSocketError('Invalid close frame: %s %s %s' % (f_fin, f_opcode, repr(f_payload)))
-                code = self.close_code
-                if code is None or (code >= 1000 and code < 5000):
-                    self.close()
-                else:
-                    self.close(1002)
-                    raise WebSocketError('Received invalid close frame: %r %r' % (code, self.close_message))
-                return
-            elif f_opcode == self.OPCODE_PING:
-                self.send_frame(f_payload, opcode=self.OPCODE_PONG)
-                continue
-            elif f_opcode == self.OPCODE_PONG:
-                continue
-            else:
-                self._close()  # XXX should send proper reason?
-                raise WebSocketError("Unexpected opcode=%r" % (f_opcode, ))
+                # a new frame
+                if opcode:
+                    raise ProtocolError("The opcode in non-fin frame is "
+                                        "expected to be zero, got "
+                                        "{0!r}".format(f_opcode))
 
-            result.extend(f_payload)
-            if f_fin:
+                opcode = f_opcode
+
+            elif f_opcode == self.OPCODE_CONTINUATION:
+                if not opcode:
+                    raise ProtocolError("Unexpected frame with opcode=0")
+
+            elif f_opcode == self.OPCODE_PING:
+                self.handle_ping(header, payload)
+                continue
+
+            elif f_opcode == self.OPCODE_PONG:
+                self.handle_pong(header, payload)
+                continue
+
+            elif f_opcode == self.OPCODE_CLOSE:
+                self.handle_close(header, payload)
+                return
+
+            else:
+                raise ProtocolError("Unexpected opcode={0!r}".format(f_opcode))
+
+            message += payload
+
+            if header.fin:
                 break
 
         if opcode == self.OPCODE_TEXT:
-            return result, False
-        elif opcode == self.OPCODE_BINARY:
-            return result, True
-        else:
-            raise AssertionError('internal serror in gevent-websocket: opcode=%r' % (opcode, ))
+            return self._decode_bytes(message)
+
+        return bytearray(message)
 
     def receive(self):
-        result = self._receive()
-        if not result:
-            return result
-
-        message, is_binary = result
-        if is_binary:
-            return message
-        else:
-            try:
-                return message.decode('utf-8')
-            except ValueError:
-                self.close(1007)
-                raise
-
-    def send_frame(self, message, opcode):
-        """Send a frame over the websocket with message as its payload"""
-
-        if self.socket is None:
-            raise WebSocketError('The connection was closed')
-
-        header = chr(0x80 | opcode)
-
-        if isinstance(message, unicode):
-            message = message.encode('utf-8')
-
-        msg_length = len(message)
-
-        if msg_length < 126:
-            header += chr(msg_length)
-        elif msg_length < (1 << 16):
-            header += chr(126) + struct.pack('!H', msg_length)
-        elif msg_length < (1 << 63):
-            header += chr(127) + struct.pack('!Q', msg_length)
-        else:
-            raise FrameTooLargeException()
+        """
+        Read and return a message from the stream. If `None` is returned, then
+        the socket is considered closed/errored.
+        """
+        if self.closed:
+            return
 
         try:
-            combined = header + message
-        except TypeError:
-            with self._writelock:
-                self._write(header)
-                self._write(message)
-        else:
-            with self._writelock:
-                self._write(combined)
+            return self.read_message()
+
+        except ProtocolError:
+            self.close(1002)
+            raise
+
+        except error:
+            raise WebSocketError("Socket is dead")
+
+    def send_frame(self, message, opcode):
+        """
+        Send a frame over the websocket with message as its payload
+        """
+        if self.closed:
+            raise WebSocketError("The connection was closed")
+
+        if opcode == self.OPCODE_TEXT:
+            message = self._encode_bytes(message)
+        elif opcode == self.OPCODE_BINARY:
+            message = str(message)
+
+        header = Header.encode_header(True, opcode, '', len(message), 0)
+
+        try:
+            self.raw_write(header + message)
+        except error:
+            raise WebSocketError("Socket is dead")
 
     def send(self, message, binary=None):
-        """Send a frame over the websocket with message as its payload"""
+        """
+        Send a frame over the websocket with message as its payload
+        """
         if binary is None:
             binary = not isinstance(message, (str, unicode))
 
-        if binary:
-            return self.send_frame(message, self.OPCODE_BINARY)
-        else:
-            return self.send_frame(message, self.OPCODE_TEXT)
+        opcode = self.OPCODE_BINARY if binary else self.OPCODE_TEXT
+
+        self.send_frame(message, opcode)
 
     def close(self, code=1000, message=''):
-        """Close the websocket, sending the specified code and message"""
-        if self.socket is not None:
-            message = self._encode_text(message)
-            self.send_frame(struct.pack('!H%ds' % len(message), code, message), opcode=self.OPCODE_CLOSE)
-            self._close()
+        """
+        Close the websocket and connection, sending the specified code and
+        message.  The underlying socket object is _not_ closed, that is the
+        responsibility of the initiator.
+        """
 
-    def _close(self):
-        if self.socket is not None:
-            self.socket = None
-            self._write = None
+        if self.closed:
+            return
 
-            if not self._reading:
-                self.fobj.close()
+        try:
+            message = self._encode_bytes(message)
 
-            self.fobj = None
+            self.send_frame(
+                struct.pack('!H%ds' % len(message), code, message),
+                opcode=self.OPCODE_CLOSE)
+        except WebSocketError:
+            # failed to write the closing frame but it's ok because we're
+            # closing the socket anyway.
+            pass
+        finally:
+            self.closed = True
+
+            self.stream = None
+            self.raw_write = None
+            self.raw_read = None
+
+            self.environ = None
+
+
+class Stream(object):
+    """
+    Wraps the handler's socket/rfile attributes and makes it in to a file like
+    object that can be read from/written to by the lower level websocket api.
+    """
+
+    __slots__ = ('handler', 'read', 'write')
+
+    def __init__(self, handler):
+        self.handler = handler
+        self.read = handler.rfile.read
+        self.write = handler.socket.sendall
+
+
+class Header(object):
+    __slots__ = ('fin', 'mask', 'opcode', 'flags', 'length')
+
+    FIN_MASK = 0x80
+    OPCODE_MASK = 0x0f
+    MASK_MASK = 0x80
+    LENGTH_MASK = 0x7f
+
+    RSV0_MASK = 0x40
+    RSV1_MASK = 0x20
+    RSV2_MASK = 0x10
+
+    # bitwise mask that will determine the reserved bits for a frame header
+    HEADER_FLAG_MASK = RSV0_MASK | RSV1_MASK | RSV2_MASK
+
+    def __init__(self, fin=0, opcode=0, flags=0, length=0):
+        self.mask = ''
+        self.fin = fin
+        self.opcode = opcode
+        self.flags = flags
+        self.length = length
+
+    def mask_payload(self, payload):
+        payload = bytearray(payload)
+        mask = bytearray(self.mask)
+
+        for i in xrange(self.length):
+            payload[i] ^= mask[i % 4]
+
+        return str(payload)
+
+    # it's the same operation
+    unmask_payload = mask_payload
+
+    def __repr__(self):
+        return ("<Header fin={0} opcode={1} length={2} flags={3} at "
+                "0x{4!x}>").format(self.fin, self.opcode, self.length,
+                                   self.flags, id(self))
+
+    @classmethod
+    def decode_header(cls, stream):
+        """
+        Decode a WebSocket header.
+
+        :param stream: A file like object that can be 'read' from.
+        :returns: A `Header` instance.
+        """
+        read = stream.read
+        data = read(2)
+
+        if len(data) != 2:
+            raise WebSocketError("Unexpected EOF while decoding header")
+
+        first_byte, second_byte = struct.unpack('!BB', data)
+
+        header = cls(
+            fin=first_byte & cls.FIN_MASK == cls.FIN_MASK,
+            opcode=first_byte & cls.OPCODE_MASK,
+            flags=first_byte & cls.HEADER_FLAG_MASK,
+            length=second_byte & cls.LENGTH_MASK)
+
+        has_mask = second_byte & cls.MASK_MASK == cls.MASK_MASK
+
+        if header.opcode > 0x07:
+            if not header.fin:
+                raise ProtocolError(
+                    "Received fragmented control frame: {0!r}".format(data))
+
+            # Control frames MUST have a payload length of 125 bytes or less
+            if header.length > 125:
+                raise FrameTooLargeException(
+                    "Control frame cannot be larger than 125 bytes: "
+                    "{0!r}".format(data))
+
+        if header.length == 126:
+            # 16 bit length
+            data = read(2)
+
+            if len(data) != 2:
+                raise WebSocketError('Unexpected EOF while decoding header')
+
+            header.length = struct.unpack('!H', data)[0]
+        elif header.length == 127:
+            # 64 bit length
+            data = read(8)
+
+            if len(data) != 8:
+                raise WebSocketError('Unexpected EOF while decoding header')
+
+            header.length = struct.unpack('!Q', data)[0]
+
+        if has_mask:
+            mask = read(4)
+
+            if len(mask) != 4:
+                raise WebSocketError('Unexpected EOF while decoding header')
+
+            header.mask = mask
+
+        return header
+
+    @classmethod
+    def encode_header(cls, fin, opcode, mask, length, flags):
+        """
+        Encodes a WebSocket header.
+
+        :param fin: Whether this is the final frame for this opcode.
+        :param opcode: The opcode of the payload, see `OPCODE_*`
+        :param mask: Whether the payload is masked.
+        :param length: The length of the frame.
+        :param flags: The RSV* flags.
+        :return: A bytestring encoded header.
+        """
+        first_byte = opcode
+        second_byte = 0
+        extra = ''
+
+        if fin:
+            first_byte |= cls.FIN_MASK
+
+        if flags & cls.RSV0_MASK:
+            first_byte |= cls.RSV0_MASK
+
+        if flags & cls.RSV1_MASK:
+            first_byte |= cls.RSV1_MASK
+
+        if flags & cls.RSV2_MASK:
+            first_byte |= cls.RSV2_MASK
+
+        # now deal with length complexities
+        if length < 126:
+            second_byte += length
+        elif length <= 0xffff:
+            second_byte += 126
+            extra = struct.pack('!H', length)
+        elif length <= 0xffffffffffffffff:
+            second_byte += 127
+            extra = struct.pack('!Q', length)
+        else:
+            raise FrameTooLargeException
+
+        if mask:
+            second_byte |= cls.MASK_MASK
+
+            extra += mask
+
+        return chr(first_byte) + chr(second_byte) + extra

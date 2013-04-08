@@ -73,7 +73,7 @@ class WebSocket(object):
 
         return text.encode('utf-8')
 
-    def is_valid_close_code(self, code):
+    def _is_valid_close_code(self, code):
         """
         :returns: Whether the returned close code is a valid hybi return code.
         """
@@ -165,6 +165,7 @@ class WebSocket(object):
 
         :return: The header and payload as a tuple.
         """
+
         header = Header.decode_header(self.stream)
 
         if header.flags:
@@ -254,7 +255,6 @@ class WebSocket(object):
 
         except ProtocolError:
             self.close(1002)
-            raise
 
         except error:
             raise WebSocketError("Socket is dead")
@@ -306,7 +306,7 @@ class WebSocket(object):
                 struct.pack('!H%ds' % len(message), code, message),
                 opcode=self.OPCODE_CLOSE)
         except WebSocketError:
-            # failed to write the closing frame but it's ok because we're
+            # Failed to write the closing frame but it's ok because we're
             # closing the socket anyway.
             pass
         finally:

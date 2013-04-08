@@ -42,7 +42,6 @@ default_args = ["*",
 
 
 class ProcessPool(object):
-
     def __init__(self):
         self.popens = []
 

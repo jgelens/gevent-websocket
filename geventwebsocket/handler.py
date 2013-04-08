@@ -3,6 +3,7 @@ import hashlib
 
 from gevent.pywsgi import WSGIHandler
 from .websocket import WebSocket, Stream
+from .logging import create_logger
 
 
 class WebSocketHandler(WSGIHandler):
@@ -90,17 +91,20 @@ class WebSocketHandler(WSGIHandler):
             connection = self.environ.get('HTTP_CONNECTION', '').lower()
 
             if 'upgrade' not in connection:
-                # this is not a websocket request, so we must not handle it
+                # This is not a websocket request, so we must not handle it
                 self.logger.warning("Client didn't ask for a connection "
                                     "upgrade")
                 return
+        else:
+            # This is not a websocket request, so we must not handle it
+            return
 
         if self.environ.get('HTTP_SEC_WEBSOCKET_VERSION'):
             return self.upgrade_connection()
         else:
+            self.logger.warning("No protocol defined")
             self.start_response('426 Upgrade Required', [
                 ('Sec-WebSocket-Version', ', '.join(self.SUPPORTED_VERSIONS))])
-            self.logger.warning("No protocol defined")
 
             return ['No Websocket protocol version defined']
 
@@ -182,7 +186,11 @@ class WebSocketHandler(WSGIHandler):
 
     @property
     def logger(self):
+        if not hasattr(self.server, 'logger'):
+            self.server.logger = create_logger(__name__)
+
         return self.server.logger
+
 
 
 #class MessageHandler(object):

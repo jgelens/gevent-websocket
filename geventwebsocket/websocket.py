@@ -6,6 +6,8 @@ from .exceptions import ProtocolError
 from .exceptions import WebSocketError
 from .exceptions import FrameTooLargeException
 
+from .utf8validator import Utf8Validator
+
 
 class WebSocket(object):
     """
@@ -17,7 +19,8 @@ class WebSocket(object):
         written to by this WebSocket object.
     """
 
-    __slots__ = ('environ', 'closed', 'stream', 'raw_write', 'raw_read')
+    __slots__ = ('utf8validator', 'utf8validate_last', 'environ', 'closed',
+                 'stream', 'raw_write', 'raw_read')
 
     OPCODE_CONTINUATION = 0x00
     OPCODE_TEXT = 0x01
@@ -34,6 +37,8 @@ class WebSocket(object):
 
         self.raw_write = stream.write
         self.raw_read = stream.read
+
+        self.utf8validator = Utf8Validator()
 
     def __del__(self):
         try:
@@ -252,10 +257,10 @@ class WebSocket(object):
 
         try:
             return self.read_message()
-
+        except UnicodeError:
+            self.close(1007)
         except ProtocolError:
             self.close(1002)
-
         except error:
             raise WebSocketError("Socket is dead")
 
@@ -369,7 +374,7 @@ class Header(object):
 
     def __repr__(self):
         return ("<Header fin={0} opcode={1} length={2} flags={3} at "
-                "0x{4!x}>").format(self.fin, self.opcode, self.length,
+                "0x{4:x}>").format(self.fin, self.opcode, self.length,
                                    self.flags, id(self))
 
     @classmethod

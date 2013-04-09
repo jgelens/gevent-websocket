@@ -195,6 +195,15 @@ class WebSocket(object):
 
         return header, payload
 
+    def validate_utf8(self, payload):
+        # Make sure the frames are decodable independently
+        self.utf8validate_last = self.utf8validator.validate(payload)
+
+        if not self.utf8validate_last[0]:
+            raise UnicodeError("Encountered invalid UTF-8 while processing "
+                               "text message at payload octet index "
+                               "{0:d}".format(self.utf8validate_last[3]))
+
     def read_message(self):
         """
         Return the next text or binary message from the socket.
@@ -215,6 +224,10 @@ class WebSocket(object):
                     raise ProtocolError("The opcode in non-fin frame is "
                                         "expected to be zero, got "
                                         "{0!r}".format(f_opcode))
+
+                # Start reading a new message, reset the validator
+                self.utf8validator.reset()
+                self.utf8validate_last = (True, True, 0, 0)
 
                 opcode = f_opcode
 
@@ -237,15 +250,20 @@ class WebSocket(object):
             else:
                 raise ProtocolError("Unexpected opcode={0!r}".format(f_opcode))
 
+            if opcode == self.OPCODE_TEXT:
+                self.validate_utf8(payload)
+
             message += payload
 
             if header.fin:
                 break
 
         if opcode == self.OPCODE_TEXT:
+            self.validate_utf8(message)
             return self._decode_bytes(message)
-
-        return bytearray(message)
+            return message
+        else:
+            return bytearray(message)
 
     def receive(self):
         """

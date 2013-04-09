@@ -20,7 +20,7 @@ class WebSocket(object):
     """
 
     __slots__ = ('utf8validator', 'utf8validate_last', 'environ', 'closed',
-                 'stream', 'raw_write', 'raw_read')
+                 'stream', 'raw_write', 'raw_read', 'handler')
 
     OPCODE_CONTINUATION = 0x00
     OPCODE_TEXT = 0x01
@@ -29,7 +29,7 @@ class WebSocket(object):
     OPCODE_PING = 0x09
     OPCODE_PONG = 0x0a
 
-    def __init__(self, environ, stream):
+    def __init__(self, environ, stream, handler):
         self.environ = environ
         self.closed = False
 
@@ -39,6 +39,7 @@ class WebSocket(object):
         self.raw_read = stream.read
 
         self.utf8validator = Utf8Validator()
+        self.handler = handler
 
     def __del__(self):
         try:
@@ -127,6 +128,10 @@ class WebSocket(object):
             return
 
         return self.environ.get('PATH_INFO')
+
+    @property
+    def logger(self):
+        return self.handler.logger
 
     def handle_close(self, header, payload):
         """
@@ -331,8 +336,9 @@ class WebSocket(object):
         except WebSocketError:
             # Failed to write the closing frame but it's ok because we're
             # closing the socket anyway.
-            pass
+            self.logger.debug("Failed to write closing frame -> closing socket")
         finally:
+            self.logger.debug("Closed WebSocket")
             self.closed = True
 
             self.stream = None

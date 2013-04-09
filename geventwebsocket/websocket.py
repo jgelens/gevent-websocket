@@ -153,7 +153,11 @@ class WebSocket(object):
         payload = payload[2:]
 
         if payload:
-            payload = self._decode_bytes(payload)
+            validator = Utf8Validator()
+            val = validator.validate(payload)
+
+            if not val[0]:
+                raise UnicodeError
 
         if not self._is_valid_close_code(code):
             raise ProtocolError('Invalid close code {0}'.format(code))
@@ -265,7 +269,6 @@ class WebSocket(object):
 
         if opcode == self.OPCODE_TEXT:
             self.validate_utf8(message)
-            return self._decode_bytes(message)
             return message
         else:
             return bytearray(message)

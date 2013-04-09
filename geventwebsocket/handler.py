@@ -167,7 +167,7 @@ class WebSocketHandler(WSGIHandler):
 
             return [msg]
 
-        self.websocket = WebSocket(self.environ, Stream(self))
+        self.websocket = WebSocket(self.environ, Stream(self), self)
 
         self.environ.update({
             'wsgi.websocket_version': version,

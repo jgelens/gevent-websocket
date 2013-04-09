@@ -16,21 +16,7 @@ spec = {
    "enable-ssl": False,
    "servers": []}
 
-
-default_args = [
-    '6.4.1',
-    '6.4.2',
-    '6.4.3',
-    '6.4.4',
-]
-
-# We ignore 7.5.1 because it checks that close frame has valid utf-8 message
-# we do not validate utf-8.
-
-# We ignore 7.9.3-13 because it checks that when a close frame with code 1004
-# and others sent, 1002 is sent back; we only send back 1002 for obvious
-# violations like < 1000 and >= 5000; for all codes in the 1000-5000 range
-# we send code 1000 back
+default_args = ['*']
 
 
 class ProcessPool(object):

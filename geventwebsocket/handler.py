@@ -174,9 +174,17 @@ class WebSocketHandler(WSGIHandler):
             return [msg]
 
         # Check for WebSocket Protocols
-        requested_protocols = set(self.environ.get('HTTP_SEC_WEBSOCKET_PROTOCOL', '').split(','))
-        allowed_protocols = requested_protocols & set(self.server.protocols)
-        self.logger.debug("Protocols allowed: {0}".format(", ".join(allowed_protocols)))
+        requested_protocols = self.environ.get('HTTP_SEC_WEBSOCKET_PROTOCOL', '')
+
+        if hasattr(self.application, 'app_protocol'):
+            allowed_protocol = self.application.app_protocol(self.environ['PATH_INFO'])
+            if allowed_protocol in requested_protocols:
+                protocol = allowed_protocol
+                self.logger.debug("Protocol allowed: {0}".format(protocol))
+            else:
+                protocol = ''
+        else:
+            protocol = ''
 
         self.websocket = WebSocket(self.environ, Stream(self), self)
         self.environ.update({
@@ -187,7 +195,7 @@ class WebSocketHandler(WSGIHandler):
         headers = [
             ("Upgrade", "websocket"),
             ("Connection", "Upgrade"),
-            ("Sec-WebSocket-Protocol", ", ".join(allowed_protocols)),
+            ("Sec-WebSocket-Protocol", protocol),
             ("Sec-WebSocket-Accept", base64.b64encode(
                 hashlib.sha1(key + self.GUID).digest())),
         ]

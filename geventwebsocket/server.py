@@ -1,5 +1,6 @@
 from gevent.pywsgi import WSGIServer
 
+from .resource import Resource
 from .handler import WebSocketHandler
 from .logging import create_logger
 
@@ -15,8 +16,6 @@ class WebSocketServer(WSGIServer):
     def __init__(self, *args, **kwargs):
         self.debug = kwargs.pop('debug', False)
         self.pre_start_hook = kwargs.pop('pre_start_hook', None)
-        self.protocols = kwargs.pop('protocols', [])
-
         self._logger = None
 
         kwargs['handler_class'] = WebSocketHandler

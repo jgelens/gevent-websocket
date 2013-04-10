@@ -30,25 +30,23 @@ class WebSocketApplication(object):
     def on_message(self, message, *args, **kwargs):
         self.ws.send(message, **kwargs)
 
-    def supported_protocols(self):
-        return []
+    @classmethod
+    def protocol(self):
+        return ''
 
 
-class MessageResource(object):
+class Resource(object):
     def __init__(self, environ=None, apps=[]):
         self.environ = environ
         self.ws = None
         self.apps = apps
         self.current_app = None
 
-    @property
-    def supported_protocols(self):
-        protocols = []
-
-        for app in self.apps.values():
-            protocols.extend(app.supported_protocols())
-
-        return protocols
+    def app_protocol(self, path):
+        if path in self.apps:
+            return self.apps[path].protocol()
+        else:
+            return ''
 
     def listen(self):
         self.ws = self.environ['wsgi.websocket']

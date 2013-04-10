@@ -42,7 +42,8 @@ class WebSocketHandler(WSGIHandler):
         if (hasattr(self.server, 'pre_start_hook')
                 and self.server.pre_start_hook):
             self.logger.debug("Calling pre-start hook")
-            self.server.pre_start_hook(self)
+            if self.server.pre_start_hook(self):
+                return super(WebSocketHandler, self).run_application()
 
         self.logger.debug("Initializing WebSocket")
         self.result = self.upgrade_websocket()

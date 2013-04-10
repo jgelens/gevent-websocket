@@ -2,8 +2,6 @@ import inspect
 import types
 import json
 
-from geventwebsocket.handler import MessageHandler
-
 
 def export_rpc(arg=None):
    if type(arg) is types.FunctionType:
@@ -52,7 +50,7 @@ class RemoteProcedures(object):
             raise Exception("no such uri '{}'".format(uri))
 
 
-class WampProtocol(MessageHandler):
+class WampProtocol(object):
     MSG_WELCOME = 0;
     MSG_PREFIX = 1;
     MSG_CALL = 2;
@@ -63,25 +61,14 @@ class WampProtocol(MessageHandler):
     MSG_PUBLISH = 7;
     MSG_EVENT = 8;
 
-    def __init__(self, environ):
-        self.ws = environ['wsgi.websocket']
+    PROTOCOL_NAME = "wamp"
+
+    def __init__(self, app):
+        self._app = app
         self.procedures = RemoteProcedures()
         self.prefixes = Prefixes()
 
         self.session_id = "3434324"  # TODO generate
-        self.send_welcome()
-        self.on_open()
-        self._handle()
-
-    def _handle(self):
-        while True:
-            message = self.ws.receive()
-
-            if message is None:
-                self.on_close()
-                break
-            else:
-                self.on_message(message)
 
     def _serialize(self, data):
         return json.dumps(data)
@@ -93,8 +80,18 @@ class WampProtocol(MessageHandler):
         self.procedures.register_object(*args, **kwargs)
 
     def send_welcome(self):
-        welcome = [self.MSG_WELCOME, self.session_id, 1, 'Gevent-Websocket/dev']
-        self.ws.send(self._serialize(welcome))
+        from geventwebsocket import get_version
+
+        welcome = [
+            self.MSG_WELCOME,
+            self.session_id,
+            1,
+            'gevent-websocket/' + get_version()
+        ]
+        self.app.ws.send(self._serialize(welcome))
+
+    def on_open(self):
+        self.app.on_open()
 
     def on_message(self, message):
         data = json.loads(message)
@@ -127,9 +124,15 @@ class WampProtocol(MessageHandler):
                               call_id, 'http://TODO#generic',
                               str(type(e)), str(e)]
 
-            self.ws.send(self._serialize(result_msg))
+            self.app.on_message(self._serialize(result_msg))
 
     def on_close(self):
-        print "bye!"
+        self.app.on_close()
 
+    @property
+    def app(self):
+        if self._app:
+            return self._app
+        else:
+            raise Exception("No application coupled")
 

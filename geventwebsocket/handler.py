@@ -39,7 +39,8 @@ class WebSocketHandler(WSGIHandler):
             self.websocket.close()
 
     def run_application(self):
-        if self.server.pre_start_hook:
+        if (hasattr(self.server, 'pre_start_hook')
+                and self.server.pre_start_hook):
             self.logger.debug("Calling pre-start hook")
             self.server.pre_start_hook(self)
 
@@ -171,8 +172,12 @@ class WebSocketHandler(WSGIHandler):
 
             return [msg]
 
-        self.websocket = WebSocket(self.environ, Stream(self), self)
+        # Check for WebSocket Protocols
+        requested_protocols = set(self.environ.get('HTTP_SEC_WEBSOCKET_PROTOCOL', '').split(','))
+        allowed_protocols = requested_protocols & set(self.server.protocols)
+        self.logger.debug("Protocols allowed: {0}".format(", ".join(allowed_protocols)))
 
+        self.websocket = WebSocket(self.environ, Stream(self), self)
         self.environ.update({
             'wsgi.websocket_version': version,
             'wsgi.websocket': self.websocket
@@ -181,6 +186,7 @@ class WebSocketHandler(WSGIHandler):
         headers = [
             ("Upgrade", "websocket"),
             ("Connection", "Upgrade"),
+            ("Sec-WebSocket-Protocol", ", ".join(allowed_protocols)),
             ("Sec-WebSocket-Accept", base64.b64encode(
                 hashlib.sha1(key + self.GUID).digest())),
         ]

@@ -1,5 +1,5 @@
 from geventwebsocket.server import WebSocketServer
-from geventwebsocket.resource import MessageResource, WebSocketApplication
+from geventwebsocket.resource import Resource, WebSocketApplication
 from geventwebsocket.protocols.wamp import WampProtocol, export_rpc
 
 
@@ -32,14 +32,14 @@ class WampApplication(WebSocketApplication):
         return self.wamp
 
     @classmethod
-    def supported_protocols(cls):
-        return [WampProtocol.PROTOCOL_NAME]
+    def protocol(cls):
+        return WampProtocol.PROTOCOL_NAME
 
 
 if __name__ == "__main__":
-    resource = MessageResource(apps={
+    resource = Resource(apps={
         '/': WampApplication
     })
 
-    server = WebSocketServer(("", 8000), resource, protocols=resource.supported_protocols,  debug=True)
+    server = WebSocketServer(("", 8000), resource, debug=True)
     server.serve_forever()

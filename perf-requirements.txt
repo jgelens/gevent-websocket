@@ -1,0 +1,4 @@
+cython
+wsaccel
+
+-r requirements.txt

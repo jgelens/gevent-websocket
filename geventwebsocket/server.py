@@ -14,6 +14,8 @@ class WebSocketServer(WSGIServer):
 
     def __init__(self, *args, **kwargs):
         self.debug = kwargs.pop('debug', False)
+        self.pre_start_hook = kwargs.pop('pre_start_hook', None)
+
         self._logger = None
 
         kwargs['handler_class'] = WebSocketHandler

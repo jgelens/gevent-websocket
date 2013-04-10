@@ -1,7 +1,6 @@
-version_info = (0, 3, 6)
-__version__ = ".".join(map(str, version_info))
+VERSION = (0, 4, 0, 'alpha', 0)
 
-__all__ = ['WebSocketHandler', 'WebSocketError']
 
-from geventwebsocket.handler import WebSocketHandler
-from geventwebsocket.websocket import WebSocketError
+def get_version(*args, **kwargs):
+    from .utils import get_version
+    return get_version(*args, **kwargs)

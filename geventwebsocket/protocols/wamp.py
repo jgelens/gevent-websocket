@@ -5,6 +5,7 @@ import string
 import types
 
 from .base import BaseProtocol
+from ..exceptions import WebSocketError
 
 
 def export_rpc(arg=None):
@@ -69,8 +70,6 @@ class Channels(object):
         # TODO: implement prefix matching
 
     def subscribe(self, uri, client):
-        print "subcsription to ", uri
-        print "of client ", client
         if uri in self.channels:
             self.channels[uri].append(client)
 
@@ -91,10 +90,13 @@ class Channels(object):
         # TODO: exclude & eligible
 
         msg = [WampProtocol.MSG_EVENT, uri, event]
-        print msg
 
         for client in self.channels[uri]:
-            client.ws.send(serialize(msg))
+            try:
+                client.ws.send(serialize(msg))
+            except WebSocketError:
+                # Seems someone didn't unsubscribe before disconnecting
+                self.channels[uri].remove(client)
 
 
 class WampProtocol(BaseProtocol):
@@ -175,11 +177,9 @@ class WampProtocol(BaseProtocol):
         uri = self.prefixes.resolve(curie_or_uri)
 
         if action == self.MSG_SUBSCRIBE and len(data) == 2:
-            # resolve prefixe
             self.server.channels.subscribe(data[1], self.handler.active_client)
 
         elif action == self.MSG_UNSUBSCRIBE and len(data) == 2:
-            # resolve prefixes
             self.server.channels.unsubscribe(
                 data[1], self.handler.active_client)
 
@@ -188,10 +188,6 @@ class WampProtocol(BaseProtocol):
             exclude = data[3] if len(data) >= 4 else None
             eligible = data[4] if len(data) >= 5 else None
 
-            print "data", data
-            print "payload", payload
-            print "exclude", exclude
-            print "eligible", eligible
             self.server.channels.publish(uri, payload, exclude, eligible)
 
     def on_open(self):
@@ -202,8 +198,6 @@ class WampProtocol(BaseProtocol):
 
         if not isinstance(data, list):
             raise Exception('incoming data is no list')
-
-        print "RX", data
 
         if data[0] == self.MSG_PREFIX and len(data) == 3:
             prefix, uri = data[1:3]
@@ -217,7 +211,6 @@ class WampProtocol(BaseProtocol):
             return self.pubsub_action(data)
         else:
             raise Exception("Unknown call")
-
 
     def on_close(self):
         self.app.on_close()

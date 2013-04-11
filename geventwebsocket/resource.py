@@ -40,10 +40,10 @@ class WebSocketApplication(object):
 
 
 class Resource(object):
-    def __init__(self, environ=None, apps=[]):
+    def __init__(self, apps=None, environ=None):
         self.environ = environ
         self.ws = None
-        self.apps = apps
+        self.apps = apps if apps else []
         self.current_app = None
 
     def app_protocol(self, path):
@@ -64,7 +64,7 @@ class Resource(object):
         else:
             raise Exception("No apps defined")
 
-    def call(self, environ, start_response):
+    def run_app(self, environ, start_response):
         if self.environ['PATH_INFO'] in self.apps:
             return self.apps[self.environ['PATH_INFO']](environ, start_response)
         else:
@@ -78,4 +78,4 @@ class Resource(object):
 
             return None
         else:
-            return self.call(environ, start_response)
+            return self.run_app(environ, start_response)

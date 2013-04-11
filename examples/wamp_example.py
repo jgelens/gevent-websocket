@@ -13,6 +13,8 @@ class WampApplication(WebSocketApplication):
     def on_open(self):
         self.wamp.register_procedure("http://localhost:8000/calc#add", self.add)
         self.wamp.register_object("http://localhost:8000/test#", RPCTestClass)
+        self.wamp.register_pubsub("http://localhost:8000/somechannel")
+
         self.wamp.send_welcome()
         print "opened"
 
@@ -37,7 +39,7 @@ class WampApplication(WebSocketApplication):
 
 
 if __name__ == "__main__":
-    resource = Resource(apps={
+    resource = Resource({
         '/': WampApplication
     })
 

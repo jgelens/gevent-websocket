@@ -6,6 +6,12 @@ from .websocket import WebSocket, Stream
 from .logging import create_logger
 
 
+class Client(object):
+    def __init__(self, address, ws):
+        self.address = address
+        self.ws = ws
+
+
 class WebSocketHandler(WSGIHandler):
     """
     Automatically upgrades the connection to a websocket.
@@ -34,8 +40,10 @@ class WebSocketHandler(WSGIHandler):
         # Since we're now a websocket connection, we don't care what the
         # application actually responds with for the http response
         try:
+            self.server.clients[self.client_address] = Client(self.client_address, self.websocket)
             self.application(self.environ, lambda s, h: [])
         finally:
+            del self.server.clients[self.client_address]
             self.websocket.close()
 
     def run_application(self):
@@ -210,6 +218,9 @@ class WebSocketHandler(WSGIHandler):
 
         return self.server.logger
 
+    @property
+    def active_client(self):
+        return self.server.clients[self.client_address]
     def start_response(self, status, headers, exc_info=None):
         """
         Called when the handler is ready to send a response back to the remote

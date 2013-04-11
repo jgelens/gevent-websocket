@@ -21,3 +21,16 @@ class BaseProtocol(object):
         else:
             raise Exception("No application coupled")
 
+    @property
+    def server(self):
+        if not hasattr(self.app, 'ws'):
+            return None
+
+        return self.app.ws.handler.server
+
+    @property
+    def handler(self):
+        if not hasattr(self.app, 'ws'):
+            return None
+
+        return self.app.ws.handler

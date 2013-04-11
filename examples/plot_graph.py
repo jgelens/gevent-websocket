@@ -30,7 +30,7 @@ def static_wsgi_app(environ, start_response):
 
 
 if __name__ == "__main__":
-    resource = Resource(apps={
+    resource = Resource({
         '/': static_wsgi_app,
         '/data': PlotApplication
     })

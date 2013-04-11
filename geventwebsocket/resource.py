@@ -1,3 +1,4 @@
+from .protocols.base import BaseProtocol
 from .exceptions import WebSocketError
 
 
@@ -30,6 +31,9 @@ class WebSocketApplication(object):
     def on_message(self, message, *args, **kwargs):
         self.ws.send(message, **kwargs)
 
+    def build_protocol(self):
+        return BaseProtocol(self)
+
     @classmethod
     def protocol(self):
         return ''
@@ -60,6 +64,18 @@ class Resource(object):
         else:
             raise Exception("No apps defined")
 
+    def call(self, environ, start_response):
+        if self.environ['PATH_INFO'] in self.apps:
+            return self.apps[self.environ['PATH_INFO']](environ, start_response)
+        else:
+            raise Exception("No apps defined")
+
     def __call__(self, environ, start_response):
         self.environ = environ
-        self.listen()
+
+        if 'wsgi.websocket' in self.environ:
+            self.listen()
+
+            return None
+        else:
+            return self.call(environ, start_response)

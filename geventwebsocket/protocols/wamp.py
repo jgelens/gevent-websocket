@@ -2,6 +2,8 @@ import inspect
 import types
 import json
 
+from .base import BaseProtocol
+
 
 def export_rpc(arg=None):
    if type(arg) is types.FunctionType:
@@ -50,7 +52,7 @@ class RemoteProcedures(object):
             raise Exception("no such uri '{}'".format(uri))
 
 
-class WampProtocol(object):
+class WampProtocol(BaseProtocol):
     MSG_WELCOME = 0;
     MSG_PREFIX = 1;
     MSG_CALL = 2;
@@ -63,12 +65,12 @@ class WampProtocol(object):
 
     PROTOCOL_NAME = "wamp"
 
-    def __init__(self, app):
-        self._app = app
+    def __init__(self, *args, **kwargs):
         self.procedures = RemoteProcedures()
         self.prefixes = Prefixes()
-
         self.session_id = "3434324"  # TODO generate
+
+        super(WampProtocol, self).__init__(*args, **kwargs)
 
     def _serialize(self, data):
         return json.dumps(data)
@@ -128,11 +130,4 @@ class WampProtocol(object):
 
     def on_close(self):
         self.app.on_close()
-
-    @property
-    def app(self):
-        if self._app:
-            return self._app
-        else:
-            raise Exception("No application coupled")
 

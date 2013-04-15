@@ -15,7 +15,8 @@ setup(
     download_url="https://bitbucket.org/Jeffrey/gevent-websocket",
     install_requires=("gevent", "greenlet"),
     packages=find_packages(exclude=["examples", "tests"]),
-    license="BSD",
+    license=open('LICENSE').read(),
+    zip_safe=False,
     classifiers=[
         "Development Status :: 4 - Beta",
         "Environment :: Web Environment",

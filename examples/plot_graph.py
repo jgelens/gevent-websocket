@@ -13,8 +13,7 @@ Or with an Gunicorn wrapper:
 import gevent
 import random
 
-from geventwebsocket.server import WebSocketServer
-from geventwebsocket.resource import WebSocketApplication, Resource
+from geventwebsocket import WebSocketServer, WebSocketApplication, Resource
 
 
 class PlotApplication(WebSocketApplication):

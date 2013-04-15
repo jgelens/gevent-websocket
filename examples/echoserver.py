@@ -35,7 +35,7 @@ def http_handler(environ, start_response):
 
 
 path = os.path.dirname(geventwebsocket.__file__)
-agent = "gevent-websocket/%s" % (geventwebsocket.__version__)
+agent = "gevent-websocket/%s" % (geventwebsocket.get_version())
 
 print "Running %s from %s" % (agent, path)
 WebSocketServer(("", 8000), echo_app, debug=False).serve_forever()

@@ -5,6 +5,19 @@ gevent-websocket
 `gevent-websocket`_ is a websocket library for the gevent_ networking library
 written written and maintained by `Jeffrey Gelens`_ It is licensed under the BSD license.
 
+::
+
+    from geventwebsocket.server import WebSocketServer, WebSocketApplication
+
+    class EchoApplication(WebSocketServer):
+        def on_message(self, message):
+            self.ws.send(message)
+
+    WebSocketServer(
+        ('', 8000),
+        Resource({'/': EchoApplication})
+    )
+
 Installation
 ------------
 
@@ -67,13 +80,10 @@ funtionality for the application.
 
     gunicorn -k "geventwebsocket.gunicorn.workers.GeventWebSocketWorker" wsgi:websocket_app
 
-Backwards incompatible changes
-------------------------------
-
-- The `wait()` method was renamed to `receive()`.
 
 .. _gevent-websocket: http://www.bitbucket.org/Jeffrey/gevent-websocket/
 .. _gevent: http://www.gevent.org/
 .. _Jeffrey Gelens: http://www.gelens.org/
 .. _PyPi: http://pypi.python.org/pypi/gevent-websocket/
 .. _repository: http://www.bitbucket.org/Jeffrey/gevent-websocket/
+.. _RFC6455: http://datatracker.ietf.org/doc/rfc6455/?include_text=1

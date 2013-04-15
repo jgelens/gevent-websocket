@@ -4,3 +4,4 @@ syntax: glob
 *.sw?
 tests/testresults.sqlite3
 .vfenv
+docs/_build

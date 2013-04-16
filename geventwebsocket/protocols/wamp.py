@@ -133,7 +133,7 @@ class WampProtocol(BaseProtocol):
 
         self.server.channels.create(*args, **kwargs)
 
-    def send_welcome(self):
+    def do_handshake(self):
         from geventwebsocket import get_version
 
         welcome = [
@@ -192,6 +192,7 @@ class WampProtocol(BaseProtocol):
 
     def on_open(self):
         self.app.on_open()
+        self.do_handshake()
 
     def on_message(self, message):
         data = json.loads(message)

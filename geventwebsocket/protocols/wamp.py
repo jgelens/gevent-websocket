@@ -51,8 +51,15 @@ class RemoteProcedures(object):
     def call(self, uri, args):
         if uri in self.calls:
             proc = self.calls[uri]
+
+            # Do the correct call whether it's a function or instance method.
             if isinstance(proc, tuple):
-                return proc[1](proc[0](), *args)
+                if proc[1].__self__ is None:
+                    # Create instance of object and call method
+                    return proc[1](proc[0](), *args)
+                else:
+                    # Call bound method on instance
+                    return proc[1](*args)
             else:
                 return self.calls[uri](*args)
         else:

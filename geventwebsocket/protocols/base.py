@@ -1,4 +1,3 @@
-
 class BaseProtocol(object):
     PROTOCOL_NAME = ""
 

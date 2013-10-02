@@ -34,13 +34,14 @@ class WebSocketHandler(WSGIHandler):
         """
         Called when a websocket has been created successfully.
         """
-        if hasattr(self, 'prevent_wsgi_call') and self.prevent_wsgi_call:
+        if getattr(self, 'prevent_wsgi_call', False):
             return
 
         # Since we're now a websocket connection, we don't care what the
         # application actually responds with for the http response
         try:
-            self.server.clients[self.client_address] = Client(self.client_address, self.websocket)
+            self.server.clients[self.client_address] = Client(
+                self.client_address, self.websocket)
             self.application(self.environ, lambda s, h: [])
         finally:
             del self.server.clients[self.client_address]
@@ -182,11 +183,13 @@ class WebSocketHandler(WSGIHandler):
             return [msg]
 
         # Check for WebSocket Protocols
-        requested_protocols = self.environ.get('HTTP_SEC_WEBSOCKET_PROTOCOL', '')
+        requested_protocols = self.environ.get(
+            'HTTP_SEC_WEBSOCKET_PROTOCOL', '')
         protocol = None
 
         if hasattr(self.application, 'app_protocol'):
-            allowed_protocol = self.application.app_protocol(self.environ['PATH_INFO'])
+            allowed_protocol = self.application.app_protocol(
+                self.environ['PATH_INFO'])
 
             if allowed_protocol and allowed_protocol in requested_protocols:
                 protocol = allowed_protocol
@@ -218,9 +221,14 @@ class WebSocketHandler(WSGIHandler):
 
         return self.server.logger
 
+    def log_request(self):
+        if '101' not in self.status:
+            self.logger.info(self.format_request())
+
     @property
     def active_client(self):
         return self.server.clients[self.client_address]
+
     def start_response(self, status, headers, exc_info=None):
         """
         Called when the handler is ready to send a response back to the remote
@@ -237,8 +245,8 @@ class WebSocketHandler(WSGIHandler):
         """
         Sets up the ``pywsgi.Handler`` to work with a websocket response.
 
-        This is used by other projects that need to support WebSocket connections
-        as part of a larger effort.
+        This is used by other projects that need to support WebSocket
+        connections as part of a larger effort.
         """
         assert not self.headers_sent
 
@@ -246,11 +254,14 @@ class WebSocketHandler(WSGIHandler):
             # a WebSocket connection is not established, do nothing
             return
 
-        # so that `finalize_headers` doesn't write a Content-Length header
+        # So that `finalize_headers` doesn't write a Content-Length header
         self.provided_content_length = False
-        # the websocket is now controlling the response
+
+        # The websocket is now controlling the response
         self.response_use_chunked = False
-        # once the request is over, the connection must be closed
+
+        # Once the request is over, the connection must be closed
         self.close_connection = True
-        # prevents the Date header from being written
+
+        # Prevents the Date header from being written
         self.provided_date = True

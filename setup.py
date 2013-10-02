@@ -13,12 +13,13 @@ setup(
                  "network library"),
     long_description=open("README.rst").read(),
     download_url="https://bitbucket.org/Jeffrey/gevent-websocket",
-    install_requires=("gevent", "greenlet"),
     packages=find_packages(exclude=["examples", "tests"]),
     license=open('LICENSE').read(),
     zip_safe=False,
+    install_requires=(
+        "gevent"
+    ),
     classifiers=[
-        "Development Status :: 4 - Beta",
         "Environment :: Web Environment",
         "Intended Audience :: Developers",
         "License :: OSI Approved :: Apache Software License",

@@ -1,5 +1,6 @@
 import base64
 import hashlib
+import warnings
 
 from gevent.pywsgi import WSGIHandler
 from .websocket import WebSocket, Stream
@@ -39,6 +40,12 @@ class WebSocketHandler(WSGIHandler):
 
         # Since we're now a websocket connection, we don't care what the
         # application actually responds with for the http response
+
+        if type(self.server).__name__ != 'WebSocketServer':
+            self.server.clients = {}
+            warnings.warn('Usage of WSGIServer is deprecated, please use '
+                          'WebSocketServer')
+
         try:
             self.server.clients[self.client_address] = Client(
                 self.client_address, self.websocket)

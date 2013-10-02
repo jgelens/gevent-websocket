@@ -14,11 +14,8 @@ def echo_app(environ, start_response):
     try:
         while True:
             message = websocket.receive()
-            if message is None:
-                break
             websocket.send(message)
         websocket.close()
-
     except geventwebsocket.WebSocketError, ex:
         print "{0}: {1}".format(ex.__class__.__name__, ex)
 

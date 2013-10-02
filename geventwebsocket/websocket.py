@@ -296,7 +296,7 @@ class WebSocket(object):
         Send a frame over the websocket with message as its payload
         """
         if self.closed:
-            raise WebSocketError("The connection was closed")
+            raise WebSocketError("Connection is already closed")
 
         if opcode == self.OPCODE_TEXT:
             message = self._encode_bytes(message)

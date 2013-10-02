@@ -278,8 +278,9 @@ class WebSocket(object):
         Read and return a message from the stream. If `None` is returned, then
         the socket is considered closed/errored.
         """
+
         if self.closed:
-            return
+            raise WebSocketError("Connection is already closed")
 
         try:
             return self.read_message()
@@ -328,7 +329,7 @@ class WebSocket(object):
         """
 
         if self.closed:
-            return
+            raise WebSocketError("Connection is already closed")
 
         try:
             message = self._encode_bytes(message)

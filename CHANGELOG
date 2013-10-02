@@ -1,5 +1,0 @@
-Version 0.3.6
--------------
-
-- Added missing Gunicorn worker
-- Resolved #24 socket_error undefined

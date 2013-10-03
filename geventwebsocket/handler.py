@@ -35,16 +35,16 @@ class WebSocketHandler(WSGIHandler):
         """
         Called when a websocket has been created successfully.
         """
+
         if getattr(self, 'prevent_wsgi_call', False):
             return
 
+        # In case WebSocketServer is not used
+        if not hasattr(self.server, 'clients'):
+            self.server.clients = {}
+
         # Since we're now a websocket connection, we don't care what the
         # application actually responds with for the http response
-
-        if type(self.server).__name__ != 'WebSocketServer':
-            self.server.clients = {}
-            warnings.warn('Usage of WSGIServer is deprecated, please use '
-                          'WebSocketServer')
 
         try:
             self.server.clients[self.client_address] = Client(

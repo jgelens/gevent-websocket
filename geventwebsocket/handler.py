@@ -97,10 +97,9 @@ class WebSocketHandler(WSGIHandler):
         self.logger.debug("Validating WebSocket request")
 
         if self.environ.get('REQUEST_METHOD', '') != 'GET':
-            self.start_response('400 Bad Request', [])
-            self.logger.warning("No request method in headers")
-
-            return ['Unknown request method']
+            # This is not a websocket request, so we must not handle it
+            self.logger.debug('Can only upgrade connection if using GET method.')
+            return
 
         if self.request_version != 'HTTP/1.1':
             self.start_response('402 Bad Request', [])

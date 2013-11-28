@@ -9,6 +9,10 @@ from .exceptions import FrameTooLargeException
 from .utf8validator import Utf8Validator
 
 
+MSG_SOCKET_DEAD = "Socket is dead"
+MSG_ALREADY_CLOSED = "Connection is already closed"
+
+
 class WebSocket(object):
     """
     Base class for supporting websocket operations.
@@ -100,6 +104,10 @@ class WebSocket(object):
             return False
 
         return True
+
+    @property
+    def current_app(self):
+        return self.handler.server.application.current_app
 
     @property
     def origin(self):
@@ -280,7 +288,8 @@ class WebSocket(object):
         """
 
         if self.closed:
-            raise WebSocketError("Connection is already closed")
+            self.current_app.on_close(MSG_ALREADY_CLOSED)
+            raise WebSocketError(MSG_ALREADY_CLOSED)
 
         try:
             return self.read_message()
@@ -289,14 +298,17 @@ class WebSocket(object):
         except ProtocolError:
             self.close(1002)
         except error:
-            raise WebSocketError("Socket is dead")
+            self.current_app.on_close(MSG_SOCKET_DEAD)
+
+            return None
 
     def send_frame(self, message, opcode):
         """
         Send a frame over the websocket with message as its payload
         """
         if self.closed:
-            raise WebSocketError("Connection is already closed")
+            self.current_app.on_close(MSG_ALREADY_CLOSED)
+            raise WebSocketError(MSG_ALREADY_CLOSED)
 
         if opcode == self.OPCODE_TEXT:
             message = self._encode_bytes(message)
@@ -319,7 +331,11 @@ class WebSocket(object):
 
         opcode = self.OPCODE_BINARY if binary else self.OPCODE_TEXT
 
-        self.send_frame(message, opcode)
+        try:
+            self.send_frame(message, opcode)
+        except WebSocketError:
+            self.current_app.on_close(MSG_SOCKET_DEAD)
+            raise WebSocketError(MSG_SOCKET_DEAD)
 
     def close(self, code=1000, message=''):
         """
@@ -329,7 +345,7 @@ class WebSocket(object):
         """
 
         if self.closed:
-            raise WebSocketError("Connection is already closed")
+            self.current_app.on_close(MSG_ALREADY_CLOSED)
 
         try:
             message = self._encode_bytes(message)
@@ -350,6 +366,8 @@ class WebSocket(object):
             self.raw_read = None
 
             self.environ = None
+
+            self.current_app.on_close("Connection closed")
 
 
 class Stream(object):

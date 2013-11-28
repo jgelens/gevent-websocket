@@ -24,7 +24,7 @@ class WampApplication(WebSocketApplication):
         print "message: ", message
         super(WampApplication, self).on_message(message)
 
-    def on_close(self):
+    def on_close(self, reason):
         print "closed"
 
     def add(self, var1, var2):

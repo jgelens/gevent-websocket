@@ -220,5 +220,3 @@ class WampProtocol(BaseProtocol):
         else:
             raise Exception("Unknown call")
 
-    def on_close(self):
-        self.app.on_close()

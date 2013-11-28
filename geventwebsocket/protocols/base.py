@@ -10,8 +10,8 @@ class BaseProtocol(object):
     def on_message(self, message):
         self.app.on_message(message)
 
-    def on_close(self):
-        self.app.on_close()
+    def on_close(self, reason=None):
+        self.app.on_close(reason)
 
     @property
     def app(self):

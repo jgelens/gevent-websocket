@@ -31,7 +31,7 @@ Features include:
         Resource({'/': EchoApplication})
     )
 
-::
+or a low level implementation::
 
     from gevent import pywsgi
     from geventwebsocket.handler import WebSocketHandler
@@ -81,6 +81,13 @@ installing `wsaccel <https://github.com/methane/wsaccel>`_::
 `gevent-websocket`_ automatically detects ``wsaccell`` and uses the Cython
 implementation for UTF8 validation and later also frame masking and
 demasking.
+
+Get in touch
+^^^^^^^^^^^^
+
+Get in touch on IRC #gevent on Freenode or on the Gevent `mailinglist
+<https://groups.google.com/forum/#!forum/gevent>`_. Issues can be created
+on `Bitbucket <https://bitbucket.org/Jeffrey/gevent-websocket/issues>`_
 
 .. _WAMP: http://www.wamp.ws
 .. _gevent-websocket: http://www.bitbucket.org/Jeffrey/gevent-websocket/

@@ -22,6 +22,9 @@ class PlotApplication(WebSocketApplication):
             self.ws.send("0 %s %s\n" % (i, random.random()))
             gevent.sleep(0.1)
 
+    def on_close(self, reason):
+        print "Connection Closed!!!", reason
+
 
 def static_wsgi_app(environ, start_response):
     start_response("200 OK", [("Content-Type", "text/html")])

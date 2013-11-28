@@ -87,7 +87,7 @@ Get in touch
 
 Get in touch on IRC #gevent on Freenode or on the Gevent `mailinglist
 <https://groups.google.com/forum/#!forum/gevent>`_. Issues can be created
-on `Bitbucket <https://bitbucket.org/Jeffrey/gevent-websocket/issues>`_
+on `Bitbucket <https://bitbucket.org/Jeffrey/gevent-websocket/issues?status=new&status=open>`_.
 
 .. _WAMP: http://www.wamp.ws
 .. _gevent-websocket: http://www.bitbucket.org/Jeffrey/gevent-websocket/

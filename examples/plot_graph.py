@@ -2,11 +2,11 @@
 This example generates random data and plots a graph in the browser.
 
 Run it using Gevent directly using:
-    $ python plot_grapg.py
+    $ python plot_graph.py
 
 Or with an Gunicorn wrapper:
     $ gunicorn -k "geventwebsocket.gunicorn.workers.GeventWebSocketWorker" \
-        plot_graph:app
+        plot_graph:resource
 """
 
 
@@ -28,10 +28,11 @@ def static_wsgi_app(environ, start_response):
     return open("plot_graph.html").readlines()
 
 
+resource = Resource({
+    '/': static_wsgi_app,
+    '/data': PlotApplication
+})
+
 if __name__ == "__main__":
-    resource = Resource({
-        '/': static_wsgi_app,
-        '/data': PlotApplication
-    })
     server = WebSocketServer(('', 8000), resource, debug=True)
     server.serve_forever()

@@ -7,9 +7,10 @@ gevent-websocket
 Features include:
 
 - Integration on both socket level or using an abstract interface.
-- RPC and PubSub implementation using `WAMP`_ (WebSocket Application
+- RPC and PubSub framework using `WAMP`_ (WebSocket Application
   Messaging Protocol).
-- Easily extendible using a simple WebSocket protocol framework
+- Easily extendible using a simple WebSocket protocol plugin API
+
 
 ::
 
@@ -69,6 +70,17 @@ funtionality for the application.
 
     gunicorn -k "geventwebsocket.gunicorn.workers.GeventWebSocketWorker" wsgi:websocket_app
 
+Performance
+^^^^^^^^^^^
+
+`gevent-websocket`_ is pretty fast, but can be accelerated further by
+installing `wsaccel <https://github.com/methane/wsaccel>`_::
+
+    $ pip install wsaccel
+
+`gevent-websocket`_ automatically detects ``wsaccell`` and uses the Cython
+implementation for UTF8 validation and later also frame masking and
+demasking.
 
 .. _WAMP: http://www.wamp.ws
 .. _gevent-websocket: http://www.bitbucket.org/Jeffrey/gevent-websocket/

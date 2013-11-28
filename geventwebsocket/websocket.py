@@ -107,7 +107,14 @@ class WebSocket(object):
 
     @property
     def current_app(self):
-        return self.handler.server.application.current_app
+        if hasattr(self.handler.server.application, 'current_app'):
+            return self.handler.server.application.current_app
+        else:
+            class MockApp():
+                def on_close(self, *args):
+                    pass
+
+            return MockApp()
 
     @property
     def origin(self):

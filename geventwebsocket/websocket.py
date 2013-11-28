@@ -110,6 +110,7 @@ class WebSocket(object):
         if hasattr(self.handler.server.application, 'current_app'):
             return self.handler.server.application.current_app
         else:
+            # For backwards compatibility reasons
             class MockApp():
                 def on_close(self, *args):
                     pass

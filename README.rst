@@ -10,8 +10,14 @@ written written and maintained by `Jeffrey Gelens`_ It is licensed under the BSD
     from geventwebsocket.server import WebSocketServer, WebSocketApplication
 
     class EchoApplication(WebSocketServer):
+        def on_open(self):
+            print "Connection opened"
+
         def on_message(self, message):
             self.ws.send(message)
+
+        def on_close(self, reason):
+            print reason
 
     WebSocketServer(
         ('', 8000),

@@ -10,10 +10,13 @@ class RPCTestClass(object):
 
 
 class WampApplication(WebSocketApplication):
+    protocol_class = WampProtocol
+
     def on_open(self):
-        self.wamp.register_procedure("http://localhost:8000/calc#add", self.add)
-        self.wamp.register_object("http://localhost:8000/test#", RPCTestClass())
-        self.wamp.register_pubsub("http://localhost:8000/somechannel")
+        wamp = self.protocol
+        wamp.register_procedure("http://localhost:8000/calc#add", self.add)
+        wamp.register_object("http://localhost:8000/test#", RPCTestClass())
+        wamp.register_pubsub("http://localhost:8000/somechannel")
 
         print "opened"
 
@@ -24,21 +27,17 @@ class WampApplication(WebSocketApplication):
     def on_close(self):
         print "closed"
 
-    def add(self, var, has):
-        has.update({'bloep': var})
-        return has
+    def add(self, var1, var2):
+        return var1 + var2
 
-    def build_protocol(self):
-        self.wamp = WampProtocol(self)
-        return self.wamp
 
-    @classmethod
-    def protocol(cls):
-        return WampProtocol.PROTOCOL_NAME
-
+def static_wsgi_app(environ, start_response):
+    start_response("200 OK", [("Content-Type", "text/html")])
+    return open("wamp_example.html").readlines()
 
 if __name__ == "__main__":
     resource = Resource({
+        '/page': static_wsgi_app,
         '/': WampApplication
     })
 

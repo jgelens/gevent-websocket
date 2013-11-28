@@ -1,5 +1,5 @@
 class BaseProtocol(object):
-    PROTOCOL_NAME = ""
+    PROTOCOL_NAME = ''
 
     def __init__(self, app):
         self._app = app

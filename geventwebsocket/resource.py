@@ -3,8 +3,10 @@ from .exceptions import WebSocketError
 
 
 class WebSocketApplication(object):
+    protocol_class = BaseProtocol
+
     def __init__(self, ws):
-        self.protocol = self.build_protocol()
+        self.protocol = self.protocol_class(self)
         self.ws = ws
 
     def handle(self):
@@ -14,13 +16,9 @@ class WebSocketApplication(object):
             try:
                 message = self.ws.receive()
             except WebSocketError:
-                break
-
-            if message is None:
                 self.protocol.on_close()
-                break
-            else:
-                self.protocol.on_message(message)
+
+            self.protocol.on_message(message)
 
     def on_open(self, *args, **kwargs):
         pass
@@ -31,12 +29,9 @@ class WebSocketApplication(object):
     def on_message(self, message, *args, **kwargs):
         self.ws.send(message, **kwargs)
 
-    def build_protocol(self):
-        return BaseProtocol(self)
-
     @classmethod
-    def protocol(self):
-        return ''
+    def protocol_name(cls):
+        return cls.protocol_class.PROTOCOL_NAME
 
 
 class Resource(object):
@@ -48,7 +43,7 @@ class Resource(object):
 
     def app_protocol(self, path):
         if path in self.apps:
-            return self.apps[path].protocol()
+            return self.apps[path].protocol_name()
         else:
             return ''
 

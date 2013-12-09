@@ -14,9 +14,9 @@ Features include:
 
 ::
 
-    from geventwebsocket.server import WebSocketServer, WebSocketApplication
+    from geventwebsocket import WebSocketServer, WebSocketApplication, Resource
 
-    class EchoApplication(WebSocketServer):
+    class EchoApplication(WebSocketApplication):
         def on_open(self):
             print "Connection opened"
 
@@ -29,7 +29,7 @@ Features include:
     WebSocketServer(
         ('', 8000),
         Resource({'/': EchoApplication})
-    )
+    ).serve_forever()
 
 or a low level implementation::
 

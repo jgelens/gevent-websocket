@@ -17,6 +17,7 @@ class WebSocketApplication(object):
                 message = self.ws.receive()
             except WebSocketError:
                 self.protocol.on_close()
+                break
 
             self.protocol.on_message(message)
 

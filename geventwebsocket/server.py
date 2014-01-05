@@ -22,7 +22,7 @@ class WebSocketServer(WSGIServer):
         super(WebSocketServer, self).__init__(*args, **kwargs)
 
     def handle(self, socket, address):
-        print "Connected Clients: ", str(self.clients.keys())
+        print("Connected Clients: " + str(self.clients.keys()))
 
         handler = self.handler_class(socket, address, self)
         handler.handle()

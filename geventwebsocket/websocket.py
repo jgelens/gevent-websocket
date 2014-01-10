@@ -11,6 +11,7 @@ from .utf8validator import Utf8Validator
 
 MSG_SOCKET_DEAD = "Socket is dead"
 MSG_ALREADY_CLOSED = "Connection is already closed"
+MSG_CLOSED = "Connection closed"
 
 
 class WebSocket(object):
@@ -306,9 +307,10 @@ class WebSocket(object):
         except ProtocolError:
             self.close(1002)
         except error:
-            self.current_app.on_close(MSG_SOCKET_DEAD)
+            self.close()
+            self.current_app.on_close(MSG_CLOSED)
 
-            return None
+        return None
 
     def send_frame(self, message, opcode):
         """
@@ -328,7 +330,7 @@ class WebSocket(object):
         try:
             self.raw_write(header + message)
         except error:
-            raise WebSocketError("Socket is dead")
+            raise WebSocketError(MSG_SOCKET_DEAD)
 
     def send(self, message, binary=None):
         """
@@ -375,7 +377,7 @@ class WebSocket(object):
 
             self.environ = None
 
-            self.current_app.on_close("Connection closed")
+            self.current_app.on_close(MSG_ALREADY_CLOSED)
 
 
 class Stream(object):

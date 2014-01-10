@@ -1,3 +1,5 @@
+import re
+
 from .protocols.base import BaseProtocol
 from .exceptions import WebSocketError
 
@@ -61,8 +63,9 @@ class Resource(object):
             raise Exception("No apps defined")
 
     def run_app(self, environ, start_response):
-        if self.environ['PATH_INFO'] in self.apps:
-            return self.apps[self.environ['PATH_INFO']](environ, start_response)
+        for path, app in self.apps.iteritems():
+            if re.match(path, self.environ['PATH_INFO']):
+                return app(environ, start_response)
         else:
             raise Exception("No apps defined")
 

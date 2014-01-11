@@ -17,7 +17,8 @@ setup(
     license=open('LICENSE').read(),
     zip_safe=False,
     install_requires=(
-        "gevent"
+        "gevent",
+        "ujson"
     ),
     classifiers=[
         "Environment :: Web Environment",

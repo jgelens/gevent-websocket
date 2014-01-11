@@ -202,6 +202,9 @@ class WampProtocol(BaseProtocol):
         self.do_handshake()
 
     def on_message(self, message):
+        if message is None:
+            return
+
         data = json.loads(message)
 
         if not isinstance(data, list):

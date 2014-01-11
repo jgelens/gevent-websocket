@@ -1,0 +1,105 @@
+<!doctype html>
+<html class="no-js" lang="en">
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Chat Demo</title>
+
+        <link rel="stylesheet" href="{{ url_for('static', filename='stylesheets/app.css') }}" />
+        <script src="{{ url_for('static', filename='bower_components/modernizr/modernizr.js') }}"></script>
+    </head>
+
+    <body>
+        <div class="row">
+            <div class="large-12 columns">
+                <h1>Websocket chat <small class="connecting_status">disconnected</small></h1>
+            </div>
+        </div>
+
+        <div class="row">
+            <div class="large-8 columns">
+                <section class="row collapse">
+                    <div class="small-8 columns">
+                        <input type="text" class="nickname" value="unknown">
+                    </div>
+                    <div class="small-4 columns">
+                        <button class="postfix secondary change_nickname">Change nickname</button>
+                    </div>
+                </section>
+                <section class="panel radius">
+                    <ul class="message_pane">
+                    </ul>
+                </section>
+                <section class="row collapse">
+                    <div class="small-10 columns">
+                        <input type="text" class="message">
+                    </div>
+                    <div class="small-2 columns">
+                        <button class="postfix secondary send_message">Send</button>
+                    </div>
+                </section>
+            </div>
+            <div class="large-4 columns">
+                <aside class="panel radius callout">
+                    <h3>Connected clients</h3>
+                    <ul class="connected_clients">
+                    </ul>
+                </aside>
+            </div>
+        </div>
+
+        <script src="{{ url_for('static', filename='bower_components/jquery/jquery.js') }}"></script>
+        <script src="{{ url_for('static', filename='bower_components/foundation/js/foundation.min.js') }}"></script>
+        <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+
+        <script>
+            var nickname = $('.nickname').val();
+            var ws = new WebSocket('ws://localhost:8000/chat');
+
+            ws.onopen = function () { $('.connecting_status').text('connected'); }
+
+            ws.onclose = function () { $('.connecting_status').text('disconnected'); }
+
+            ws.onmessage = function(msg_event) {
+                var data = $.parseJSON(msg_event.data);
+
+                if (data.msg_type == 'message') {
+                    $('.message_pane').append(
+                        '<dl>' +
+                            '<dt>' + data.nickname + '</dt>' +
+                            '<dd>' + data.message + '</dd>' +
+                        '</dl>'
+                    );
+                }
+                else if (data.msg_type == 'update_clients') {
+                    $('.connected_clients li').remove();
+
+                    data.clients.forEach(function(nick) {
+                        $('.connected_clients').append('<li>' + nick);
+
+                    });
+                }
+            }
+
+            setInterval(function() {
+                ws.send(JSON.stringify({
+                    msg_type: 'update_clients',
+                    nickname: nickname
+                }));
+            }, 2000);
+
+            $('.send_message').click(function() {
+                ws.send(JSON.stringify({
+                    msg_type: 'message',
+                    nickname: nickname,
+                    message: $('.message').val()
+                }));
+                $('.message').val('');
+            });
+
+            $('.change_nickname').click(function() {
+                nickname = $('.nickname').val();
+            });
+        </script>
+    </body>
+</html>

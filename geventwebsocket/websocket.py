@@ -377,7 +377,7 @@ class WebSocket(object):
 
             self.environ = None
 
-            self.current_app.on_close(MSG_ALREADY_CLOSED)
+            #self.current_app.on_close(MSG_ALREADY_CLOSED)
 
 
 class Stream(object):

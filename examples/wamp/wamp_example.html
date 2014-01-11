@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <script src="http://autobahn.s3.amazonaws.com/js/autobahn.min.js"></script>
+        <script src="http://code.jquery.com/jquery-1.10.2.min.js"></script>
+    </head>
+    <body>
+        <h1>RPCs with AutobahnJS</h1>
+        <h2>Addition</h2>
+        <p>
+            Input 1: <input class="add_input_1" type="text"><br>
+            Input 2: <input class="add_input_2" type="text"><br>
+            <button class="exec_add">Execute</button>
+        </p>
+
+        <hr>
+
+        <h2>Key Value</h2>
+        <p>
+            Key: <input class="key_input" type="text"><br>
+            Value: <input class="val_input" type="text"><br>
+            <button class="set_value">Set Key</button>
+            <button class="get_key">Get Key</button>
+
+
+        <script>
+            var sess = null;
+            var wsuri = "ws://" + window.location.hostname + ":8000/wamp_example";
+
+            ab.connect(
+                wsuri,
+                // WAMP session was established
+                function (session) {
+                    sess = session;
+                    console.log("Connected to " + wsuri);
+                },
+
+                // WAMP session is gone
+                function (code, reason) {
+                    sess = null;
+
+                    if (code == ab.CONNECTION_UNSUPPORTED) {
+                        window.location = "http://autobahn.ws/unsupportedbrowser";
+                    } else {
+                        console.log(reason);
+                    }
+                }
+            );
+
+            $('.set_value').click(function() {
+                sess.call(
+                    'http://localhost:8000/db#set',
+                    $('.key_input').val(),
+                    $('.val_input').val()
+                );
+                alert('Value set!');
+            });
+
+            $('.get_key').click(function() {
+                sess.call(
+                    'http://localhost:8000/db#get_val',
+                    $('.key_input').val()
+                ).then(
+                    function (res) { alert('Value is: ' + res); },
+                    function (error) { alert('RPC error: ' + error.desc); }
+                );
+
+            });
+
+            $('.exec_add').click(function () {
+                sess.call(
+                    'http://localhost:8000/calc#add',
+                    $('.add_input_1').val(),
+                    $('.add_input_2').val()
+                ).then(
+                    function (res) { alert(res); },
+                    function (error) { alert('RPC error: ' + error.desc); }
+                );
+            });
+        </script>
+    </body>
+</html>

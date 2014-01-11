@@ -3,10 +3,16 @@ from geventwebsocket.resource import Resource, WebSocketApplication
 from geventwebsocket.protocols.wamp import WampProtocol, export_rpc
 
 
-class RPCTestClass(object):
+db = {}
+
+class KeyValue(object):
     @export_rpc
-    def mult(self, x, y):
-        return x * y
+    def set(self, key, val):
+        db[key] = val
+
+    @export_rpc
+    def get_val(self, key):
+        return db.get(key)
 
 
 class WampApplication(WebSocketApplication):
@@ -15,9 +21,7 @@ class WampApplication(WebSocketApplication):
     def on_open(self):
         wamp = self.protocol
         wamp.register_procedure("http://localhost:8000/calc#add", self.add)
-        wamp.register_object("http://localhost:8000/test#", RPCTestClass())
-        wamp.register_pubsub("http://localhost:8000/somechannel")
-
+        wamp.register_object("http://localhost:8000/db#", KeyValue())
         print "opened"
 
     def on_message(self, message):
@@ -27,8 +31,8 @@ class WampApplication(WebSocketApplication):
     def on_close(self, reason):
         print "closed"
 
-    def add(self, var1, var2):
-        return var1 + var2
+    def add(self, x, y):
+        return int(x) + int(y)
 
 
 def static_wsgi_app(environ, start_response):
@@ -37,8 +41,8 @@ def static_wsgi_app(environ, start_response):
 
 if __name__ == "__main__":
     resource = Resource({
-        '/page': static_wsgi_app,
-        '/': WampApplication
+        '^/wamp_example$': WampApplication,
+        '^/$': static_wsgi_app
     })
 
     server = WebSocketServer(("", 8000), resource, debug=True)

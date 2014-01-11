@@ -38,43 +38,37 @@ class WebSocketApplication(object):
 
 
 class Resource(object):
-    def __init__(self, apps=None, environ=None):
-        self.environ = environ
-        self.ws = None
+    def __init__(self, apps=None):
         self.apps = apps if apps else []
-        self.current_app = None
+
+    def _app_by_path(self, environ_path):
+        # Which app matched the current path?
+
+        for path, app in self.apps.iteritems():
+            if re.match(path, environ_path):
+                return app
 
     def app_protocol(self, path):
-        if path in self.apps:
-            return self.apps[path].protocol_name()
+        app = self._app_by_path(path)
+
+        if hasattr(app, 'protocol_name'):
+            return app.protocol_name()
         else:
             return ''
 
-    def listen(self):
-        self.ws = self.environ['wsgi.websocket']
-
-        if self.ws.path in self.apps:
-            self.current_app = self.apps[self.ws.path](self.ws)
-
-        if self.current_app:
-            self.current_app.ws = self.ws
-            self.current_app.handle()
-        else:
-            raise Exception("No apps defined")
-
-    def run_app(self, environ, start_response):
-        for path, app in self.apps.iteritems():
-            if re.match(path, self.environ['PATH_INFO']):
-                return app(environ, start_response)
-        else:
-            raise Exception("No apps defined")
-
     def __call__(self, environ, start_response):
-        self.environ = environ
+        environ = environ
+        current_app = self._app_by_path(environ['PATH_INFO'])
 
-        if 'wsgi.websocket' in self.environ:
-            self.listen()
+        if current_app is None:
+            raise Exception("No apps defined")
+
+        if 'wsgi.websocket' in environ:
+            ws = environ['wsgi.websocket']
+            current_app = current_app(ws)
+            current_app.ws = ws  # TODO: needed?
+            current_app.handle()
 
             return None
         else:
-            return self.run_app(environ, start_response)
+            return current_app(environ, start_response)

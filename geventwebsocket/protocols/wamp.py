@@ -1,11 +1,11 @@
 import inspect
-import json
+import ujson as json
 import random
 import string
 import types
 
-from .base import BaseProtocol
 from ..exceptions import WebSocketError
+from .base import BaseProtocol
 
 
 def export_rpc(arg=None):

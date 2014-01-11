@@ -54,7 +54,7 @@
 
         <script>
             var nickname = $('.nickname').val();
-            var ws = new WebSocket('ws://localhost:8000/chat');
+            var ws = new WebSocket('ws://' + window.location.hostname +':8000/chat');
 
             ws.onopen = function () { $('.connecting_status').text('connected'); }
 

@@ -56,10 +56,10 @@ def index():
     return render_template('index.html')
 
 WebSocketServer(
-    ('', 8000),
+    ('0.0.0.0', 8000),
     Resource({
-        '/chat': ChatApplication,
-        '/.*': DebuggedApplication(flask_app)
+        '^/chat': ChatApplication,
+        '^/.*': DebuggedApplication(flask_app)
     }),
     debug=False
 ).serve_forever()

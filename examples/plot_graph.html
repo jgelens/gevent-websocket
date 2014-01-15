@@ -9,7 +9,7 @@
 	var iets = "";
 	window.onload = function() {
 		var data = {};
-        var s = new WebSocket("ws://localhost:8000/data");
+        var s = new WebSocket("ws://" + window.location.hostname + ":8000/data");
 
 		s.onopen = function() {
 			s.send('hi');

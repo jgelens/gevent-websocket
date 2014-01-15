@@ -88,6 +88,12 @@
                 }));
             }, 2000);
 
+            $('.message').keypress(function(e) {
+                if (e.which === 13) {
+                    $('.send_message').click();
+                }
+            });
+
             $('.send_message').click(function() {
                 ws.send(JSON.stringify({
                     msg_type: 'message',

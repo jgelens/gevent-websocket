@@ -54,6 +54,10 @@ class WebSocketHandler(WSGIHandler):
             del self.server.clients[self.client_address]
             if not self.websocket.closed:
                 self.websocket.close()
+            self.environ.update({
+                'wsgi.websocket': None
+            })
+            self.websocket = None
 
     def run_application(self):
         if (hasattr(self.server, 'pre_start_hook')

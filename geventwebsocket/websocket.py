@@ -146,6 +146,13 @@ class WebSocket(object):
         return self.environ.get('PATH_INFO')
 
     @property
+    def query_string(self):
+        if not self.environ:
+            return
+
+        return self.environ.get('QUERY_STRING')
+
+    @property
     def logger(self):
         return self.handler.logger
 

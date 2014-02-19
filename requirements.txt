@@ -1,3 +1,2 @@
 gevent==1.0
 greenlet==0.4.1
-ujson==1.33

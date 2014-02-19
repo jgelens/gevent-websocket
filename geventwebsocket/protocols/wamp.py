@@ -1,8 +1,16 @@
 import inspect
-import ujson as json
 import random
 import string
 import types
+
+import ipdb; ipdb.set_trace()
+try:
+    import ujson as json
+except ImportError:
+    try:
+        import simplejson as json
+    except ImportError:
+        import json
 
 from ..exceptions import WebSocketError
 from .base import BaseProtocol

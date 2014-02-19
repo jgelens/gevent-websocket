@@ -1,4 +1,5 @@
 cython
 wsaccel
+ujson
 
 -r requirements.txt

@@ -74,9 +74,9 @@ Performance
 ^^^^^^^^^^^
 
 `gevent-websocket`_ is pretty fast, but can be accelerated further by
-installing `wsaccel <https://github.com/methane/wsaccel>`_::
+installing `wsaccel <https://github.com/methane/wsaccel>`_ and `ujson` or `simplejson`::
 
-    $ pip install wsaccel
+    $ pip install wsaccel ujson
 
 `gevent-websocket`_ automatically detects ``wsaccell`` and uses the Cython
 implementation for UTF8 validation and later also frame masking and

@@ -158,6 +158,12 @@ class WampProtocol(BaseProtocol):
         ]
         self.app.ws.send(serialize(welcome))
 
+    def _get_exception_info(self, e):
+        uri = 'http://TODO#generic'
+        desc = str(type(e))
+        details = str(e)
+        return [uri, desc, details]
+
     def rpc_call(self, data):
         call_id, curie_or_uri = data[1:3]
         args = data[3:]
@@ -174,8 +180,7 @@ class WampProtocol(BaseProtocol):
             result_msg = [self.MSG_CALL_RESULT, call_id, result]
         except Exception, e:
             result_msg = [self.MSG_CALL_ERROR,
-                          call_id, 'http://TODO#generic',
-                          str(type(e)), str(e)]
+                          call_id] + self._get_exception_info(e)
 
         self.app.on_message(serialize(result_msg))
 

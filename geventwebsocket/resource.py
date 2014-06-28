@@ -44,7 +44,7 @@ class Resource(object):
     def _app_by_path(self, environ_path):
         # Which app matched the current path?
 
-        for path, app in self.apps.iteritems():
+        for (path, app) in self.apps:
             if re.match(path, environ_path):
                 return app
 

@@ -42,6 +42,9 @@ class Resource(object):
         # Is apps a dictionary-like object?
         if apps:
             if hasattr(apps, "iteritems"):
+                if isinstance(apps, dict):
+                    warnings.warn("Using an unordered dictionary for the app list is discouraged and may lead to undefined behavior.", UserWarning)
+
                 # Convert to a list of tuples
                 # The order is undefined, which can be very bad, but this keeps
                 # backwards compatibility.

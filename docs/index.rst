@@ -51,7 +51,7 @@ environment. An example using `Flask <http://flask.pocoo.org>`_ follows::
                 break
 
     if __name__ == '__main__':
-        server = WebSocketServer(("", 8000), websocket_app)
+        server = WebSocketServer(("", 8000), app)
         server.serve_forever()
 
 Also the browser Javascript application can be very simple::

@@ -1,5 +1,6 @@
 import re
 
+from collections import OrderedDict
 from .protocols.base import BaseProtocol
 from .exceptions import WebSocketError
 
@@ -39,20 +40,17 @@ class WebSocketApplication(object):
 
 class Resource(object):
     def __init__(self, apps=None):
-        # Is apps a dictionary-like object?
-        if apps:
-            if hasattr(apps, "iteritems"):
-                if isinstance(apps, dict):
-                    warnings.warn("Using an unordered dictionary for the app list is discouraged and may lead to undefined behavior.", UserWarning)
+        self.apps = apps if apps else []
 
-                # Convert to a list of tuples
-                # The order is undefined, which can be very bad, but this keeps
-                # backwards compatibility.
-                self.apps = [(path, app) for path, app in apps.iteritems()]
-            else:
-                self.apps = apps
-        else:
-            self.apps = []
+        if isinstance(apps, dict) and not isinstance(apps, OrderedDict):
+            warnings.warn("Using an unordered dictionary for the "
+                          "app list is discouraged and may lead to "
+                          "undefined behavior.", UserWarning)
+
+            # Convert to a list of tuples
+            # The order is undefined, which can be very bad, but this keeps
+            # backwards compatibility.
+            self.apps = [(path, app) for path, app in apps.iteritems()]
 
     # An app can either be a standard WSGI application (an object we call with
     # __call__(self, environ, start_response)) or a class we instantiate

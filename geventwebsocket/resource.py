@@ -1,4 +1,5 @@
 import re
+import warnings
 
 from collections import OrderedDict
 from .protocols.base import BaseProtocol
@@ -62,7 +63,7 @@ class Resource(object):
 
     def _app_by_path(self, environ_path, is_websocket_request):
         # Which app matched the current path?
-        for path, app in self.apps:
+        for path, app in self.apps.items():
             if re.match(path, environ_path):
                 if is_websocket_request == self._is_websocket_app(app):
                     return app
@@ -90,6 +91,7 @@ class Resource(object):
             current_app = current_app(ws)
             current_app.ws = ws  # TODO: needed?
             current_app.handle()
-            return []    # Always return something, calling WSGI middleware may rely on it
+            # Always return something, calling WSGI middleware may rely on it
+            return []
         else:
             return current_app(environ, start_response)

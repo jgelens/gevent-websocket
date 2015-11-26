@@ -16,7 +16,7 @@ def echo_app(environ, start_response):
             message = websocket.receive()
             websocket.send(message)
         websocket.close()
-    except geventwebsocket.WebSocketError, ex:
+    except geventwebsocket.WebSocketError as ex:
         print("{0}: {1}".format(ex.__class__.__name__, ex))
 
 
@@ -32,7 +32,8 @@ def http_handler(environ, start_response):
 
 
 path = os.path.dirname(geventwebsocket.__file__)
-agent = "gevent-websocket/%s" % (geventwebsocket.get_version())
+agent = bytearray("gevent-websocket/%s" % (geventwebsocket.get_version()),
+                  'latin-1')
 
 print("Running %s from %s" % (agent, path))
 WebSocketServer(("", 8000), echo_app, debug=False).serve_forever()

@@ -53,21 +53,23 @@ class ProcessPool(object):
             popen = self.popens.pop()
             try:
                 popen.kill()
-            except Exception, ex:
-                print ex
+            except Exception as ex:
+                print(ex)
 
 
 @click.command()
 @click.argument('server', default='examples/echoserver.py')
-def main(server):
+@click.option('--no-spawn', is_flag=True, default=False)
+def main(server, no_spawn):
     spec['cases'] = ['*']
     spec['exclude-cases'] = []
 
     pool = ProcessPool()
 
     try:
-        pool.spawn([sys.executable, server])
-        pool.wait(1)
+        if not no_spawn:
+            pool.spawn([sys.executable, server])
+            pool.wait(1)
 
         response = requests.get('http://127.0.0.1:8000/version')
         agent = response.text.strip()

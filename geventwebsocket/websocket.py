@@ -2,10 +2,10 @@ import struct
 
 from socket import error
 
+from ._compat import string_types, range_type, b
 from .exceptions import ProtocolError
 from .exceptions import WebSocketError
 from .exceptions import FrameTooLargeException
-
 from .utf8validator import Utf8Validator
 
 
@@ -76,13 +76,13 @@ class WebSocket(object):
         :returns: The utf-8 byte string equivalent of `text`.
         """
 
-        if isinstance(text, str):
-            return text
+        if isinstance(text, bytearray):
+            return text.decode('utf-8')
 
-        if not isinstance(text, unicode):
-            text = unicode(text or '')
+        if not isinstance(text, str):
+            text = str(text or '')
 
-        return text.encode('utf-8')
+        return b(text)
 
     def _is_valid_close_code(self, code):
         """
@@ -166,7 +166,7 @@ class WebSocket(object):
             raise ProtocolError('Invalid close frame: {0} {1}'.format(
                 header, payload))
 
-        code = struct.unpack('!H', str(payload[:2]))[0]
+        code = struct.unpack('!H', payload[:2])[0]
         payload = payload[2:]
 
         if payload:
@@ -238,7 +238,7 @@ class WebSocket(object):
         if an exception is called. Use `receive` instead.
         """
         opcode = None
-        message = ""
+        message = b""
 
         while True:
             header, payload = self.read_frame()
@@ -286,7 +286,7 @@ class WebSocket(object):
 
         if opcode == self.OPCODE_TEXT:
             self.validate_utf8(message)
-            return message
+            return self._decode_bytes(message)
         else:
             return bytearray(message)
 
@@ -337,7 +337,7 @@ class WebSocket(object):
         Send a frame over the websocket with message as its payload
         """
         if binary is None:
-            binary = not isinstance(message, (str, unicode))
+            binary = not isinstance(message, string_types)
 
         opcode = self.OPCODE_BINARY if binary else self.OPCODE_TEXT
 
@@ -420,18 +420,37 @@ class Header(object):
         payload = bytearray(payload)
         mask = bytearray(self.mask)
 
-        for i in xrange(self.length):
+        for i in range_type(self.length):
             payload[i] ^= mask[i % 4]
 
-        return str(payload)
+        return payload
 
     # it's the same operation
     unmask_payload = mask_payload
 
     def __repr__(self):
-        return ("<Header fin={0} opcode={1} length={2} flags={3} at "
-                "0x{4:x}>").format(self.fin, self.opcode, self.length,
-                                   self.flags, id(self))
+        opcodes = {
+            0: 'continuation(0)',
+            1: 'text(1)',
+            2: 'binary(2)',
+            8: 'close(8)',
+            9: 'ping(9)',
+            10: 'pong(10)'
+        }
+        flags = {
+            0x40: 'RSV1 MASK',
+            0x20: 'RSV2 MASK',
+            0x10: 'RSV3 MASK'
+        }
+
+        return ("<Header fin={0} opcode={1} length={2} flags={3} mask={4} at "
+                "0x{5:x}>").format(
+                    self.fin,
+                    opcodes.get(self.opcode, 'reserved({})'.format(self.opcode)),
+                    self.length,
+                    flags.get(self.flags, 'reserved({})'.format(self.flags)),
+                    self.mask, id(self)
+        )
 
     @classmethod
     def decode_header(cls, stream):
@@ -540,4 +559,4 @@ class Header(object):
 
             extra += mask
 
-        return chr(first_byte) + chr(second_byte) + extra
+        return b(chr(first_byte) + chr(second_byte) + extra)

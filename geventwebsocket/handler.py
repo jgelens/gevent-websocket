@@ -1,8 +1,8 @@
 import base64
 import hashlib
-import warnings
 
 from gevent.pywsgi import WSGIHandler
+from ._compat import PY3
 from .websocket import WebSocket, Stream
 from .logging import create_logger
 
@@ -212,11 +212,16 @@ class WebSocketHandler(WSGIHandler):
             'wsgi.websocket': self.websocket
         })
 
+        if PY3:
+            accept = base64.b64encode(
+                hashlib.sha1((key + self.GUID).encode()).digest()).decode()
+        else:
+            accept = base64.b64encode(hashlib.sha1(key + self.GUID).digest())
+
         headers = [
             ("Upgrade", "websocket"),
             ("Connection", "Upgrade"),
-            ("Sec-WebSocket-Accept", base64.b64encode(
-                hashlib.sha1(key + self.GUID).digest())),
+            ("Sec-WebSocket-Accept", accept)
         ]
 
         if protocol:
@@ -233,7 +238,7 @@ class WebSocketHandler(WSGIHandler):
         return self.server.logger
 
     def log_request(self):
-        if '101' not in self.status:
+        if '101' not in str(self.status):
             self.logger.info(self.format_request())
 
     @property

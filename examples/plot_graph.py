@@ -11,16 +11,16 @@ Or with an Gunicorn wrapper:
         plot_graph:resource
 """
 
-
 import gevent
 import random
 
 from geventwebsocket import WebSocketServer, WebSocketApplication, Resource
+from geventwebsocket._compat import range_type
 
 
 class PlotApplication(WebSocketApplication):
     def on_open(self):
-        for i in range(10000):
+        for i in range_type(10000):
             self.ws.send("0 %s %s\n" % (i, random.random()))
             gevent.sleep(0.1)
 

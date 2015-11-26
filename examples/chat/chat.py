@@ -58,10 +58,10 @@ def index():
 WebSocketServer(
     ('0.0.0.0', 8000),
 
-    Resource({
-        '^/chat': ChatApplication,
-        '^/.*': DebuggedApplication(flask_app)
-    }),
+    Resource([
+        ('^/chat', ChatApplication),
+        ('^/.*', DebuggedApplication(flask_app))
+    ]),
 
     debug=False
 ).serve_forever()

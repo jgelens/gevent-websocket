@@ -31,10 +31,10 @@ def static_wsgi_app(environ, start_response):
     return open("plot_graph.html").readlines()
 
 
-resource = Resource({
-    '/': static_wsgi_app,
-    '/data': PlotApplication
-})
+resource = Resource([
+    ('/', static_wsgi_app),
+    ('/data', PlotApplication)
+])
 
 if __name__ == "__main__":
     server = WebSocketServer(('', 8000), resource, debug=True)

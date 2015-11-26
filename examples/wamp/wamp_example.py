@@ -40,10 +40,10 @@ def static_wsgi_app(environ, start_response):
     return open("wamp_example.html").readlines()
 
 if __name__ == "__main__":
-    resource = Resource({
-        '^/wamp_example$': WampApplication,
-        '^/$': static_wsgi_app
-    })
+    resource = Resource([
+        ('^/wamp_example$', WampApplication),
+        ('^/$', static_wsgi_app)
+    ])
 
     server = WebSocketServer(("", 8000), resource, debug=True)
     server.serve_forever()

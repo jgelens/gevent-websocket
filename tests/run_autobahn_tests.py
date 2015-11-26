@@ -3,18 +3,23 @@
 Test gevent-websocket with the test suite of Autobahn
 http://autobahn.ws/testsuite
 """
+
+import click
+import requests
 import sys
 import subprocess
 import time
-import urllib2
+
 from twisted.python import log
 from twisted.internet import reactor
 from autobahntestsuite.fuzzing import FuzzingClientFactory
 
+
 spec = {
-   "options": {"failByDrop": False},
-   "enable-ssl": False,
-   "servers": []}
+    "options": {"failByDrop": False},
+    "enable-ssl": False,
+    "servers": []
+}
 
 default_args = ['*']
 
@@ -39,7 +44,7 @@ class ProcessPool(object):
         end = time.time() + timeout
         while True:
             time.sleep(0.1)
-            pool.check()
+            self.check()
             if time.time() > end:
                 break
 
@@ -52,48 +57,35 @@ class ProcessPool(object):
                 print ex
 
 
-if __name__ == '__main__':
-    import optparse
-    parser = optparse.OptionParser()
-    parser.add_option('--geventwebsocket', default='../examples/echoserver.py')
-    options, args = parser.parse_args()
-
-    # Load cases
-    cases = []
-    exclude_cases = []
-
-    for arg in (args or default_args):
-        if arg.startswith('x'):
-            arg = arg[1:]
-            exclude_cases.append(arg)
-        else:
-            cases.append(arg)
-
-    spec['cases'] = cases
-    spec['exclude-cases'] = exclude_cases
+@click.command()
+@click.argument('server', default='examples/echoserver.py')
+def main(server):
+    spec['cases'] = ['*']
+    spec['exclude-cases'] = []
 
     pool = ProcessPool()
 
     try:
-        if options.geventwebsocket:
-            pool.spawn([sys.executable, options.geventwebsocket])
-
+        pool.spawn([sys.executable, server])
         pool.wait(1)
 
-        if options.geventwebsocket:
-            agent = urllib2.urlopen('http://127.0.0.1:8000/version').read().strip()
+        response = requests.get('http://127.0.0.1:8000/version')
+        agent = response.text.strip()
 
-            assert agent and '\n' not in agent and 'gevent-websocket' in agent, agent
+        assert agent and '\n' not in agent and 'gevent-websocket' in agent, agent
 
-            spec['servers'].append({"url": "ws://localhost:8000",
-                                    "agent": agent,
-                                    "options": {"version": 18}})
+        spec['servers'].append({"url": "ws://localhost:8000",
+                                "agent": agent,
+                                "options": {"version": 18}})
 
         log.startLogging(sys.stdout)
 
         # Start testing the server using the FuzzingClient
         FuzzingClientFactory(spec)
-
         reactor.run()
     finally:
         pool.kill()
+
+
+if __name__ == '__main__':
+    main()

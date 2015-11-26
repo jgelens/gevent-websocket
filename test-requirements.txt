@@ -1,3 +1,6 @@
 autobahntestsuite
+requests
+click
+unittest2
 
 -r requirements.txt

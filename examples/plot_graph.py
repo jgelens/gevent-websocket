@@ -1,3 +1,5 @@
+from __future__ import print_function
+
 """
 This example generates random data and plots a graph in the browser.
 
@@ -18,12 +20,12 @@ from geventwebsocket import WebSocketServer, WebSocketApplication, Resource
 
 class PlotApplication(WebSocketApplication):
     def on_open(self):
-        for i in xrange(10000):
+        for i in range(10000):
             self.ws.send("0 %s %s\n" % (i, random.random()))
             gevent.sleep(0.1)
 
     def on_close(self, reason):
-        print "Connection Closed!!!", reason
+        print("Connection Closed!!!", reason)
 
 
 def static_wsgi_app(environ, start_response):

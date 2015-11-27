@@ -1,6 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
 import sys
+import codecs
 
 
 PY3 = sys.version_info[0] == 3
@@ -19,4 +20,4 @@ else:
     string_types = str,
     range_type = range
     iteritems = lambda x: iter(x.items())
-    b = lambda x: x.encode('latin-1')
+    b = lambda x: codecs.latin_1_encode(x)[0]

@@ -2,7 +2,7 @@ import struct
 
 from socket import error
 
-from ._compat import string_types, range_type, b
+from ._compat import string_types, range_type, text_type, b
 from .exceptions import ProtocolError
 from .exceptions import WebSocketError
 from .exceptions import FrameTooLargeException
@@ -79,8 +79,8 @@ class WebSocket(object):
         if isinstance(text, bytearray):
             return text.decode('utf-8')
 
-        if not isinstance(text, str):
-            text = str(text or '')
+        if not isinstance(text, string_types):
+            text = text_type(text or '')
 
         return b(text)
 
@@ -203,15 +203,15 @@ class WebSocket(object):
             raise ProtocolError
 
         if not header.length:
-            return header, ''
+            return header, b''
 
         try:
             payload = self.raw_read(header.length)
         except error:
-            payload = ''
+            payload = b''
         except Exception:
             # TODO log out this exception
-            payload = ''
+            payload = b''
 
         if len(payload) != header.length:
             raise WebSocketError('Unexpected EOF reading frame payload')
@@ -285,7 +285,7 @@ class WebSocket(object):
                 break
 
         if opcode == self.OPCODE_TEXT:
-            self.validate_utf8(message)
+            self.validate_utf8(b(message))
             return self._decode_bytes(message)
         else:
             return bytearray(message)
@@ -323,14 +323,17 @@ class WebSocket(object):
         if opcode == self.OPCODE_TEXT:
             message = self._encode_bytes(message)
         elif opcode == self.OPCODE_BINARY:
-            message = str(message)
+            message = b(str(message))
 
-        header = Header.encode_header(True, opcode, '', len(message), 0)
+        header = Header.encode_header(True, opcode, b'', len(message), 0)
 
         try:
             self.raw_write(header + message)
         except error:
             raise WebSocketError(MSG_SOCKET_DEAD)
+        except:
+            import ipdb; ipdb.set_trace() 
+            raise
 
     def send(self, message, binary=None):
         """
@@ -347,7 +350,7 @@ class WebSocket(object):
             self.current_app.on_close(MSG_SOCKET_DEAD)
             raise WebSocketError(MSG_SOCKET_DEAD)
 
-    def close(self, code=1000, message=''):
+    def close(self, code=1000, message=b''):
         """
         Close the websocket and connection, sending the specified code and
         message.  The underlying socket object is _not_ closed, that is the
@@ -360,9 +363,7 @@ class WebSocket(object):
         try:
             message = self._encode_bytes(message)
 
-            self.send_frame(
-                struct.pack('!H%ds' % len(message), code, message),
-                opcode=self.OPCODE_CLOSE)
+            self.send_frame(message, opcode=self.OPCODE_CLOSE)
         except WebSocketError:
             # Failed to write the closing frame but it's ok because we're
             # closing the socket anyway.
@@ -528,7 +529,7 @@ class Header(object):
         """
         first_byte = opcode
         second_byte = 0
-        extra = ''
+        extra = None
 
         if fin:
             first_byte |= cls.FIN_MASK
@@ -559,4 +560,9 @@ class Header(object):
 
             extra += mask
 
-        return b(chr(first_byte) + chr(second_byte) + extra)
+        if extra:
+            header = (first_byte, second_byte, extra)
+        else:
+            header = (first_byte, second_byte)
+
+        return bytes(bytearray(header))

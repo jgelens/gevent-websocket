@@ -75,11 +75,8 @@ class WebSocket(object):
         :returns: The utf-8 byte string equivalent of `text`.
         """
 
-        if isinstance(text, str):
-            return text
-
-        if not isinstance(text, unicode):
-            text = unicode(text or '')
+        if not isinstance(text, str):
+            text = str(text or '')
 
         return text.encode('utf-8')
 
@@ -418,7 +415,7 @@ class Header(object):
         payload = bytearray(payload)
         mask = bytearray(self.mask)
 
-        for i in xrange(self.length):
+        for i in range(self.length):
             payload[i] ^= mask[i % 4]
 
         return str(payload)
@@ -538,4 +535,4 @@ class Header(object):
 
             extra += mask
 
-        return chr(first_byte) + chr(second_byte) + extra
+        return (chr(first_byte) + chr(second_byte) + extra).encode('utf-8')

@@ -6,7 +6,7 @@ version = __import__('geventwebsocket').get_version()
 setup(
     name="gevent-websocket",
     version=version,
-    url="https://bitbucket.org/Jeffrey/gevent-websocket",
+    url="https://github.com/jgelens/gevent-websocket",
     author="Jeffrey Gelens",
     author_email="jeffrey@noppo.pro",
     description=("Websocket handler for the gevent pywsgi server, a Python "

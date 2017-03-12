@@ -2,7 +2,7 @@ import struct
 
 from socket import error
 
-from ._compat import string_types, range_type, text_type, b
+from ._compat import string_types, range_type, text_type
 from .exceptions import ProtocolError
 from .exceptions import WebSocketError
 from .exceptions import FrameTooLargeException
@@ -62,7 +62,7 @@ class WebSocket(object):
         """
 
         if not bytestring:
-            return u''
+            return ''
 
         try:
             return bytestring.decode('utf-8')
@@ -76,13 +76,10 @@ class WebSocket(object):
         :returns: The utf-8 byte string equivalent of `text`.
         """
 
-        if isinstance(text, bytearray):
-            return text.decode('utf-8')
-
-        if not isinstance(text, string_types):
+        if not isinstance(text, str):
             text = text_type(text or '')
 
-        return b(text)
+        return text.encode("utf-8")
 
     def _is_valid_close_code(self, code):
         """
@@ -238,7 +235,7 @@ class WebSocket(object):
         if an exception is called. Use `receive` instead.
         """
         opcode = None
-        message = b""
+        message = bytearray()
 
         while True:
             header, payload = self.read_frame()
@@ -285,10 +282,10 @@ class WebSocket(object):
                 break
 
         if opcode == self.OPCODE_TEXT:
-            self.validate_utf8(b(message))
+            self.validate_utf8(message)
             return self._decode_bytes(message)
         else:
-            return bytearray(message)
+            return message
 
     def receive(self):
         """
@@ -320,10 +317,10 @@ class WebSocket(object):
             self.current_app.on_close(MSG_ALREADY_CLOSED)
             raise WebSocketError(MSG_ALREADY_CLOSED)
 
-        if opcode == self.OPCODE_TEXT:
+        if opcode in (self.OPCODE_TEXT, self.OPCODE_PING):
             message = self._encode_bytes(message)
         elif opcode == self.OPCODE_BINARY:
-            message = b(str(message))
+            message = bytes(message)
 
         header = Header.encode_header(True, opcode, b'', len(message), 0)
 
@@ -332,7 +329,6 @@ class WebSocket(object):
         except error:
             raise WebSocketError(MSG_SOCKET_DEAD)
         except:
-            import ipdb; ipdb.set_trace() 
             raise
 
     def send(self, message, binary=None):
@@ -529,7 +525,8 @@ class Header(object):
         """
         first_byte = opcode
         second_byte = 0
-        extra = None
+        extra = b""
+        result = bytearray()
 
         if fin:
             first_byte |= cls.FIN_MASK
@@ -558,11 +555,11 @@ class Header(object):
         if mask:
             second_byte |= cls.MASK_MASK
 
-            extra += mask
+        result.append(first_byte)
+        result.append(second_byte)
+        result.extend(extra)
 
-        if extra:
-            header = (first_byte, second_byte, extra)
-        else:
-            header = (first_byte, second_byte)
+        if mask:
+            result.extend(mask)
 
-        return bytes(bytearray(header))
+        return result

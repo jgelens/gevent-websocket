@@ -30,7 +30,7 @@ class PlotApplication(WebSocketApplication):
 
 def static_wsgi_app(environ, start_response):
     start_response("200 OK", [("Content-Type", "text/html")])
-    return open("plot_graph.html").readlines()
+    return [bytes(line, "utf-8") for line in open("plot_graph.html").readlines()]
 
 
 resource = Resource([

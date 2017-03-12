@@ -60,8 +60,7 @@ class WebSocketHandler(WSGIHandler):
             self.websocket = None
 
     def run_application(self):
-        if (hasattr(self.server, 'pre_start_hook')
-                and self.server.pre_start_hook):
+        if (hasattr(self.server, 'pre_start_hook') and self.server.pre_start_hook):
             self.logger.debug("Calling pre-start hook")
             if self.server.pre_start_hook(self):
                 return super(WebSocketHandler, self).run_application()
@@ -214,7 +213,8 @@ class WebSocketHandler(WSGIHandler):
 
         if PY3:
             accept = base64.b64encode(
-                hashlib.sha1((key + self.GUID).encode()).digest()).decode()
+                hashlib.sha1((key + self.GUID).encode("latin-1")).digest()
+            ).decode("latin-1")
         else:
             accept = base64.b64encode(hashlib.sha1(key + self.GUID).digest())
 

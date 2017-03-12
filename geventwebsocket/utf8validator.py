@@ -1,11 +1,10 @@
 from ._compat import PY3
 
-
 ###############################################################################
 #
 # The MIT License (MIT)
 #
-# Copyright (c) Tavendo GmbH
+# Copyright (c) Crossbar.io Technologies GmbH
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -70,6 +69,7 @@ except ImportError:
     #
 
     if PY3:
+
         # Python 3 and above
 
         # convert DFA table to bytes (performance)
@@ -210,7 +210,10 @@ except ImportError:
                 state = self.state
                 while i < l:
                     # optimized version of decode(), since we are not interested in actual code points
-                    state = ord(UTF8VALIDATOR_DFA_S[256 + (state << 4) + ord(UTF8VALIDATOR_DFA_S[ord(ba[i])])])
+                    try:
+                        state = ord(UTF8VALIDATOR_DFA_S[256 + (state << 4) + ord(UTF8VALIDATOR_DFA_S[ba[i]])])
+                    except:
+                        import ipdb; ipdb.set_trace() 
                     if state == UTF8_REJECT:
                         self.state = state
                         self.i += i

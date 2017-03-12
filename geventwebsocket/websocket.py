@@ -1,6 +1,5 @@
 import struct
-
-from socket import error
+import socket
 
 from ._compat import string_types, range_type, text_type
 from .exceptions import ProtocolError
@@ -204,7 +203,7 @@ class WebSocket(object):
 
         try:
             payload = self.raw_read(header.length)
-        except error:
+        except socket.error:
             payload = b''
         except Exception:
             # TODO log out this exception
@@ -303,7 +302,10 @@ class WebSocket(object):
             self.close(1007)
         except ProtocolError:
             self.close(1002)
-        except error:
+        except socket.timeout:
+            self.close()
+            self.current_app.on_close(MSG_CLOSED)
+        except socket.error:
             self.close()
             self.current_app.on_close(MSG_CLOSED)
 
@@ -317,6 +319,9 @@ class WebSocket(object):
             self.current_app.on_close(MSG_ALREADY_CLOSED)
             raise WebSocketError(MSG_ALREADY_CLOSED)
 
+        if not message:
+            return
+
         if opcode in (self.OPCODE_TEXT, self.OPCODE_PING):
             message = self._encode_bytes(message)
         elif opcode == self.OPCODE_BINARY:
@@ -326,7 +331,7 @@ class WebSocket(object):
 
         try:
             self.raw_write(header + message)
-        except error:
+        except socket.error:
             raise WebSocketError(MSG_SOCKET_DEAD)
         except:
             raise

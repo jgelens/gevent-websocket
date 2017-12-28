@@ -15,20 +15,21 @@ Features include:
 ::
 
     from geventwebsocket import WebSocketServer, WebSocketApplication, Resource
+    from collections import OrderedDict
 
     class EchoApplication(WebSocketApplication):
         def on_open(self):
-            print "Connection opened"
+            print("Connection opened")
 
         def on_message(self, message):
             self.ws.send(message)
 
         def on_close(self, reason):
-            print reason
+            print(reason)
 
     WebSocketServer(
         ('', 8000),
-        Resource({'/': EchoApplication})
+        Resource(OrderedDict([('/', EchoApplication)]))
     ).serve_forever()
 
 or a low level implementation::

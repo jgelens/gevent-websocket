@@ -31,6 +31,8 @@ class WebSocketHandler(WSGIHandler):
     SUPPORTED_VERSIONS = ('13', '8', '7')
     GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
 
+    websocket_class = WebSocket
+
     def run_websocket(self):
         """
         Called when a websocket has been created successfully.
@@ -205,7 +207,7 @@ class WebSocketHandler(WSGIHandler):
                 protocol = allowed_protocol
                 self.logger.debug("Protocol allowed: {0}".format(protocol))
 
-        self.websocket = WebSocket(self.environ, Stream(self), self)
+        self.websocket = self.websocket_class(self.environ, Stream(self), self)
         self.environ.update({
             'wsgi.websocket_version': version,
             'wsgi.websocket': self.websocket

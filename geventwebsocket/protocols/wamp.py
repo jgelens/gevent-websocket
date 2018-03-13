@@ -131,7 +131,7 @@ class WampProtocol(BaseProtocol):
         self.procedures = RemoteProcedures()
         self.prefixes = Prefixes()
         self.session_id = ''.join(
-            [random.choice(string.digits + string.letters)
+            [random.choice(string.digits + string.ascii_letters)
                 for i in range_type(16)])
 
         super(WampProtocol, self).__init__(*args, **kwargs)

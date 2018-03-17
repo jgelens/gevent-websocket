@@ -364,7 +364,9 @@ class WebSocket(object):
         try:
             message = self._encode_bytes(message)
 
-            self.send_frame(message, opcode=self.OPCODE_CLOSE)
+            self.send_frame(
+                struct.pack('!H%ds' % len(message), code, message),
+                opcode=self.OPCODE_CLOSE)
         except WebSocketError:
             # Failed to write the closing frame but it's ok because we're
             # closing the socket anyway.

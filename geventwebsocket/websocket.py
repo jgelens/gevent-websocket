@@ -75,10 +75,13 @@ class WebSocket(object):
         :returns: The utf-8 byte string equivalent of `text`.
         """
 
-        if not isinstance(text, str):
-            text = text_type(text or '')
+        if isinstance(text, bytearray):
+            return bytes(text)
 
-        return text.encode("utf-8")
+        if isinstance(text, str):
+            return text.encode("utf-8")
+
+        text_type(text or '').encode("utf-8")
 
     def _is_valid_close_code(self, code):
         """
@@ -154,9 +157,7 @@ class WebSocket(object):
         :param payload: The bytestring payload associated with the close frame.
         """
         if not payload:
-            self.close(1000, None)
-
-            return
+            return self.close(1000, None)
 
         if len(payload) < 2:
             raise ProtocolError('Invalid close frame: {0} {1}'.format(
@@ -175,7 +176,7 @@ class WebSocket(object):
         if not self._is_valid_close_code(code):
             raise ProtocolError('Invalid close code {0}'.format(code))
 
-        self.close(code, payload)
+        return self.close(code, payload)
 
     def handle_ping(self, header, payload):
         self.send_frame(payload, self.OPCODE_PONG)
@@ -266,8 +267,7 @@ class WebSocket(object):
                 continue
 
             elif f_opcode == self.OPCODE_CLOSE:
-                self.handle_close(header, payload)
-                return
+                return self.handle_close(header, payload)
 
             else:
                 raise ProtocolError("Unexpected opcode={0!r}".format(f_opcode))
@@ -381,6 +381,7 @@ class WebSocket(object):
 
             #self.current_app.on_close(MSG_ALREADY_CLOSED)
 
+        return code, message
 
 class Stream(object):
     """

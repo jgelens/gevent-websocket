@@ -24,8 +24,11 @@ class WebSocketApplication(object):
         while True:
             try:
                 message = self.ws.receive()
-            except WebSocketError:
-                self.protocol.on_close()
+                if self.ws.closed:
+                    self.protocol.on_close(message)
+                    break
+            except WebSocketError as e:
+                self.protocol.on_close(e)
                 break
 
             self.protocol.on_message(message)

@@ -207,7 +207,14 @@ class WebSocketHandler(WSGIHandler):
                 protocol = allowed_protocol
                 self.logger.debug("Protocol allowed: {0}".format(protocol))
 
-        self.websocket = self.websocket_class(self.environ, Stream(self), self)
+        extensions = self.environ.get('HTTP_SEC_WEBSOCKET_EXTENSIONS')
+        if extensions:
+            extensions = {extension.split(";")[0].strip() for extension in extensions.split(",")}
+            do_compress = "permessage-deflate" in extensions
+        else:
+            do_compress = False
+
+        self.websocket = self.websocket_class(self.environ, Stream(self), self, do_compress)
         self.environ.update({
             'wsgi.websocket_version': version,
             'wsgi.websocket': self.websocket
@@ -225,6 +232,9 @@ class WebSocketHandler(WSGIHandler):
             ("Connection", "Upgrade"),
             ("Sec-WebSocket-Accept", accept)
         ]
+
+        if do_compress:
+            headers.append(("Sec-WebSocket-Extensions", "permessage-deflate"))
 
         if protocol:
             headers.append(("Sec-WebSocket-Protocol", protocol))

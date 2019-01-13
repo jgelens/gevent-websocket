@@ -1,10 +1,12 @@
 from __future__ import print_function
 
 import os
+import logging
 import geventwebsocket
 
 from geventwebsocket.server import WebSocketServer
 
+logging.basicConfig(level=logging.DEBUG)
 
 def echo_app(environ, start_response):
     websocket = environ.get("wsgi.websocket")

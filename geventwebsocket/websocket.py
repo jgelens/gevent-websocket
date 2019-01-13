@@ -1,5 +1,6 @@
 import struct
 import socket
+import logging
 
 from ._compat import string_types, range_type, text_type
 from .exceptions import ProtocolError
@@ -7,6 +8,7 @@ from .exceptions import WebSocketError
 from .exceptions import FrameTooLargeException
 from .utf8validator import Utf8Validator
 
+logger = logging.getLogger(__name__)
 
 MSG_SOCKET_DEAD = "Socket is dead"
 MSG_ALREADY_CLOSED = "Connection is already closed"
@@ -141,10 +143,6 @@ class WebSocket(object):
             return
 
         return self.environ.get('PATH_INFO')
-
-    @property
-    def logger(self):
-        return self.handler.logger
 
     def handle_close(self, header, payload):
         """
@@ -368,9 +366,9 @@ class WebSocket(object):
         except WebSocketError:
             # Failed to write the closing frame but it's ok because we're
             # closing the socket anyway.
-            self.logger.debug("Failed to write closing frame -> closing socket")
+            logger.debug("Failed to write closing frame -> closing socket")
         finally:
-            self.logger.debug("Closed WebSocket")
+            logger.debug("Closed WebSocket")
             self.closed = True
 
             self.stream = None

@@ -1,11 +1,13 @@
 import base64
 import hashlib
+import logging
 
 from gevent.pywsgi import WSGIHandler
 from ._compat import PY3
 from .websocket import WebSocket, Stream
-from .logging import create_logger
 
+
+logger = logging.getLogger(__name__)
 
 class Client(object):
     def __init__(self, address, ws):
@@ -64,11 +66,11 @@ class WebSocketHandler(WSGIHandler):
 
     def run_application(self):
         if (hasattr(self.server, 'pre_start_hook') and self.server.pre_start_hook):
-            self.logger.debug("Calling pre-start hook")
+            logger.debug("Calling pre-start hook")
             if self.server.pre_start_hook(self):
                 return super(WebSocketHandler, self).run_application()
 
-        self.logger.debug("Initializing WebSocket")
+        logger.debug("Initializing WebSocket")
         self.result = self.upgrade_websocket()
 
         if hasattr(self, 'websocket'):
@@ -100,11 +102,11 @@ class WebSocketHandler(WSGIHandler):
 
         # Some basic sanity checks first
 
-        self.logger.debug("Validating WebSocket request")
+        logger.debug("Validating WebSocket request")
 
         if self.environ.get('REQUEST_METHOD', '') != 'GET':
             # This is not a websocket request, so we must not handle it
-            self.logger.debug('Can only upgrade connection if using GET method.')
+            logger.debug('Can only upgrade connection if using GET method.')
             return
 
         upgrade = self.environ.get('HTTP_UPGRADE', '').lower()
@@ -114,7 +116,7 @@ class WebSocketHandler(WSGIHandler):
 
             if 'upgrade' not in connection:
                 # This is not a websocket request, so we must not handle it
-                self.logger.warning("Client didn't ask for a connection "
+                logger.warning("Client didn't ask for a connection "
                                     "upgrade")
                 return
         else:
@@ -123,14 +125,14 @@ class WebSocketHandler(WSGIHandler):
 
         if self.request_version != 'HTTP/1.1':
             self.start_response('402 Bad Request', [])
-            self.logger.warning("Bad server protocol in headers")
+            logger.warning("Bad server protocol in headers")
 
             return ['Bad protocol version']
 
         if self.environ.get('HTTP_SEC_WEBSOCKET_VERSION'):
             return self.upgrade_connection()
         else:
-            self.logger.warning("No protocol defined")
+            logger.warning("No protocol defined")
             self.start_response('426 Upgrade Required', [
                 ('Sec-WebSocket-Version', ', '.join(self.SUPPORTED_VERSIONS))])
 
@@ -151,14 +153,14 @@ class WebSocketHandler(WSGIHandler):
         :return: The WSGI response iterator is something went awry.
         """
 
-        self.logger.debug("Attempting to upgrade connection")
+        logger.debug("Attempting to upgrade connection")
 
         version = self.environ.get("HTTP_SEC_WEBSOCKET_VERSION")
 
         if version not in self.SUPPORTED_VERSIONS:
             msg = "Unsupported WebSocket Version: {0}".format(version)
 
-            self.logger.warning(msg)
+            logger.warning(msg)
             self.start_response('400 Bad Request', [
                 ('Sec-WebSocket-Version', ', '.join(self.SUPPORTED_VERSIONS))
             ])
@@ -171,7 +173,7 @@ class WebSocketHandler(WSGIHandler):
             # 5.2.1 (3)
             msg = "Sec-WebSocket-Key header is missing/empty"
 
-            self.logger.warning(msg)
+            logger.warning(msg)
             self.start_response('400 Bad Request', [])
 
             return [msg]
@@ -181,7 +183,7 @@ class WebSocketHandler(WSGIHandler):
         except TypeError:
             msg = "Invalid key: {0}".format(key)
 
-            self.logger.warning(msg)
+            logger.warning(msg)
             self.start_response('400 Bad Request', [])
 
             return [msg]
@@ -190,7 +192,7 @@ class WebSocketHandler(WSGIHandler):
             # 5.2.1 (3)
             msg = "Invalid key: {0}".format(key)
 
-            self.logger.warning(msg)
+            logger.warning(msg)
             self.start_response('400 Bad Request', [])
 
             return [msg]
@@ -206,7 +208,7 @@ class WebSocketHandler(WSGIHandler):
 
             if allowed_protocol and allowed_protocol in requested_protocols:
                 protocol = allowed_protocol
-                self.logger.debug("Protocol allowed: {0}".format(protocol))
+                logger.debug("Protocol allowed: {0}".format(protocol))
 
         self.websocket = self.websocket_class(self.environ, Stream(self), self)
         self.environ.update({
@@ -230,19 +232,12 @@ class WebSocketHandler(WSGIHandler):
         if protocol:
             headers.append(("Sec-WebSocket-Protocol", protocol))
 
-        self.logger.debug("WebSocket request accepted, switching protocols")
+        logger.debug("WebSocket request accepted, switching protocols")
         self.start_response("101 Switching Protocols", headers)
-
-    @property
-    def logger(self):
-        if not hasattr(self.server, 'logger'):
-            self.server.logger = create_logger(__name__)
-
-        return self.server.logger
 
     def log_request(self):
         if '101' not in str(self.status):
-            self.logger.info(self.format_request())
+            logger.info(self.format_request())
 
     @property
     def active_client(self):

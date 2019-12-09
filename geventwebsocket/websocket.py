@@ -1,5 +1,6 @@
-import struct
 import socket
+import struct
+import zlib
 
 from ._compat import string_types, range_type, text_type
 from .exceptions import ProtocolError
@@ -24,7 +25,8 @@ class WebSocket(object):
     """
 
     __slots__ = ('utf8validator', 'utf8validate_last', 'environ', 'closed',
-                 'stream', 'raw_write', 'raw_read', 'handler')
+                 'stream', 'raw_write', 'raw_read', 'handler',
+                 'do_compress', 'compressor', 'decompressor')
 
     OPCODE_CONTINUATION = 0x00
     OPCODE_TEXT = 0x01
@@ -33,7 +35,7 @@ class WebSocket(object):
     OPCODE_PING = 0x09
     OPCODE_PONG = 0x0a
 
-    def __init__(self, environ, stream, handler):
+    def __init__(self, environ, stream, handler, do_compress):
         self.environ = environ
         self.closed = False
 
@@ -44,6 +46,11 @@ class WebSocket(object):
 
         self.utf8validator = Utf8Validator()
         self.handler = handler
+
+        self.do_compress = do_compress
+        if do_compress:
+            self.compressor = zlib.compressobj(7, zlib.DEFLATED, -zlib.MAX_WBITS)
+            self.decompressor = zlib.decompressobj(-zlib.MAX_WBITS)
 
     def __del__(self):
         try:
@@ -194,8 +201,15 @@ class WebSocket(object):
         """
 
         header = Header.decode_header(self.stream)
+        flags = header.flags
 
-        if header.flags:
+        if self.do_compress and (flags & header.RSV0_MASK):
+            flags &= ~header.RSV0_MASK
+            compressed = True
+        else:
+            compressed = False
+
+        if flags:
             raise ProtocolError
 
         if not header.length:
@@ -206,14 +220,20 @@ class WebSocket(object):
         except socket.error:
             payload = b''
         except Exception:
-            # TODO log out this exception
-            payload = b''
+            raise WebSocketError('Could not read payload')
 
         if len(payload) != header.length:
             raise WebSocketError('Unexpected EOF reading frame payload')
 
         if header.mask:
             payload = header.unmask_payload(payload)
+
+        if compressed:
+            payload = b''.join((
+                self.decompressor.decompress(payload),
+                self.decompressor.decompress(b'\0\0\xff\xff'),
+                self.decompressor.flush(),
+            ))
 
         return header, payload
 
@@ -311,7 +331,7 @@ class WebSocket(object):
 
         return None
 
-    def send_frame(self, message, opcode):
+    def send_frame(self, message, opcode, do_compress=False):
         """
         Send a frame over the websocket with message as its payload
         """
@@ -327,16 +347,23 @@ class WebSocket(object):
         elif opcode == self.OPCODE_BINARY:
             message = bytes(message)
 
-        header = Header.encode_header(True, opcode, b'', len(message), 0)
+        if do_compress and self.do_compress:
+            message = self.compressor.compress(message)
+            message += self.compressor.flush(zlib.Z_SYNC_FLUSH)
+            if message.endswith(b'\x00\x00\xff\xff'):
+                message = message[:-4]
+            flags = Header.RSV0_MASK
+        else:
+            flags = 0
+
+        header = Header.encode_header(True, opcode, b'', len(message), flags)
 
         try:
             self.raw_write(header + message)
         except socket.error:
             raise WebSocketError(MSG_SOCKET_DEAD)
-        except:
-            raise
 
-    def send(self, message, binary=None):
+    def send(self, message, binary=None, do_compress=True):
         """
         Send a frame over the websocket with message as its payload
         """
@@ -346,7 +373,7 @@ class WebSocket(object):
         opcode = self.OPCODE_BINARY if binary else self.OPCODE_TEXT
 
         try:
-            self.send_frame(message, opcode)
+            self.send_frame(message, opcode, do_compress)
         except WebSocketError:
             self.current_app.on_close(MSG_SOCKET_DEAD)
             raise WebSocketError(MSG_SOCKET_DEAD)

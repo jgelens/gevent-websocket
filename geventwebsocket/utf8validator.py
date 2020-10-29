@@ -210,10 +210,8 @@ except ImportError:
                 state = self.state
                 while i < l:
                     # optimized version of decode(), since we are not interested in actual code points
-                    try:
-                        state = ord(UTF8VALIDATOR_DFA_S[256 + (state << 4) + ord(UTF8VALIDATOR_DFA_S[ba[i]])])
-                    except:
-                        import ipdb; ipdb.set_trace() 
+                    state = ord(UTF8VALIDATOR_DFA_S[256 + (state << 4) + ord(UTF8VALIDATOR_DFA_S[ba[i]])])
+
                     if state == UTF8_REJECT:
                         self.state = state
                         self.i += i

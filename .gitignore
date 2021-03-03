@@ -2,3 +2,5 @@
 docs/_build
 reports
 gevent_websocket.egg-info
+/.idea
+/venv

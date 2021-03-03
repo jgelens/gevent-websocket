@@ -2,5 +2,6 @@ autobahntestsuite
 requests
 click
 unittest2
+gunicorn==20.0.4
 
 -r requirements.txt

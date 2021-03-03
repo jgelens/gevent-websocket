@@ -1,8 +1,13 @@
 import base64
 import hashlib
 
+from ._compat import PY3, gevent_pywsgi_write
 from gevent.pywsgi import WSGIHandler
-from ._compat import PY3
+
+# Monkey-patch the `write` method to preclude unicode strings from being concatenated
+# with bytes.
+WSGIHandler.write = gevent_pywsgi_write
+
 from .websocket import WebSocket, Stream
 from .logging import create_logger
 
@@ -75,7 +80,7 @@ class WebSocketHandler(WSGIHandler):
 
         if hasattr(self, 'websocket'):
             if self.status and not self.headers_sent:
-                self.write('')
+                self.write(b'')
 
             self.run_websocket()
         else:

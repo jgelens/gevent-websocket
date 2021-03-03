@@ -2,6 +2,9 @@
 gevent-websocket
 ================
 
+.. warning::
+    This repository has been cloned from `gevent-websocket-repo`_ into this repository where it has been amended to work under Python 3. As the original repository was under GitLab it wasn't possible to establish a proper fork so that repo should be added as a secondary remote to ensure no official changes are missing from this repo when developing on it.
+
 `gevent-websocket`_ is a WebSocket library for the gevent_ networking library.
 
 Features include:
@@ -97,3 +100,4 @@ on `Bitbucket <https://bitbucket.org/Jeffrey/gevent-websocket/issues?status=new&
 .. _PyPi: http://pypi.python.org/pypi/gevent-websocket/
 .. _repository: http://www.bitbucket.org/Jeffrey/gevent-websocket/
 .. _RFC6455: http://datatracker.ietf.org/doc/rfc6455/?include_text=1
+.. _gevent-websocket-repo: https://gitlab.com/noppo/gevent-websocket

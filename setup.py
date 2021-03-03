@@ -16,7 +16,9 @@ setup(
     packages=find_packages(exclude=["examples", "tests"]),
     license=open('LICENSE').read(),
     zip_safe=False,
-    install_requires=("gevent"),
+    install_requires=(
+        "gevent>=21.1.2",
+    ),
     classifiers=[
         "Environment :: Web Environment",
         "Intended Audience :: Developers",

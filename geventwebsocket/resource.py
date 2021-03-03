@@ -54,7 +54,7 @@ class Resource(object):
                               "app list is discouraged and may lead to "
                               "undefined behavior.", UserWarning)
 
-            self.apps = apps.items()
+            self.apps = list(apps.items())
 
     # An app can either be a standard WSGI application (an object we call with
     # __call__(self, environ, start_response)) or a class we instantiate

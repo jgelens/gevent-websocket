@@ -61,6 +61,7 @@ class Resource(object):
     # (and which can handle websockets). This function tells them apart.
     # Override this if you have apps that can handle websockets but don't
     # fulfill these criteria.
+    # noinspection PyMethodMayBeStatic
     def _is_websocket_app(self, app):
         return isinstance(app, type) and issubclass(app, WebSocketApplication)
 

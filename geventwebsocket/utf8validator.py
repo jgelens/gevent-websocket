@@ -34,6 +34,7 @@ __all__ = ("Utf8Validator",)
 
 
 # DFA transitions
+# noinspection LongLine,LongLine,LongLine
 UTF8VALIDATOR_DFA = (
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,  # 00..1f
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,  # 20..3f
@@ -114,6 +115,7 @@ except ImportError:
                 self.i = 0
 
             def validate(self, ba):
+                # noinspection LongLine
                 """
                 Incrementally validate a chunk of bytes provided as string.
 
@@ -135,6 +137,7 @@ except ImportError:
                 state = self.state
                 while i < l:
                     # optimized version of decode(), since we are not interested in actual code points
+                    # noinspection LongLine
                     state = UTF8VALIDATOR_DFA_S[256 + (state << 4) + UTF8VALIDATOR_DFA_S[ba[i]]]
                     if state == UTF8_REJECT:
                         self.state = state
@@ -209,11 +212,14 @@ except ImportError:
                 i = 0
                 state = self.state
                 while i < l:
-                    # optimized version of decode(), since we are not interested in actual code points
-                    try:
-                        state = ord(UTF8VALIDATOR_DFA_S[256 + (state << 4) + ord(UTF8VALIDATOR_DFA_S[ba[i]])])
-                    except:
-                        import ipdb; ipdb.set_trace() 
+                    # optimized version of decode(), since we are not interested in
+                    # actual code points
+                    state = ord(
+                        UTF8VALIDATOR_DFA_S[
+                            256 + (state << 4) +
+                            ord(UTF8VALIDATOR_DFA_S[ba[i]])
+                        ]
+                    )
                     if state == UTF8_REJECT:
                         self.state = state
                         self.i += i

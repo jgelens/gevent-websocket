@@ -13,6 +13,7 @@ class Client(object):
         self.ws = ws
 
 
+# noinspection PyIncorrectDocstring,PyIncorrectDocstring,PyIncorrectDocstring,LongLine,LongLine,LongLine,PyPep8,PyPep8,PyPep8
 class WebSocketHandler(WSGIHandler):
     """
     Automatically upgrades the connection to a websocket.
@@ -63,6 +64,7 @@ class WebSocketHandler(WSGIHandler):
             self.websocket = None
 
     def run_application(self):
+        # noinspection PyRedundantParentheses
         if (hasattr(self.server, 'pre_start_hook') and self.server.pre_start_hook):
             self.logger.debug("Calling pre-start hook")
             if self.server.pre_start_hook(self):
@@ -136,6 +138,7 @@ class WebSocketHandler(WSGIHandler):
 
             return ['No Websocket protocol version defined']
 
+    # noinspection PyUnresolvedReferences,PyUnresolvedReferences,PyUnresolvedReferences
     def upgrade_connection(self):
         """
         Validate and 'upgrade' the HTTP request to a WebSocket request.

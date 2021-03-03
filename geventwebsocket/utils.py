@@ -2,7 +2,7 @@ import subprocess
 
 
 def get_version(version=None):
-    "Returns a PEP 386-compliant version number from VERSION."
+    """Returns a PEP 386-compliant version number from VERSION."""
 
     if version is None:
         from geventwebsocket import VERSION as version
@@ -42,4 +42,4 @@ def get_hg_changeset():
     if err:
         return None
     else:
-        return rev.strip().replace('+', '')
+        return rev.strip().replace(b'+', b'')

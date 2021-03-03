@@ -14,6 +14,7 @@ MSG_ALREADY_CLOSED = "Connection is already closed"
 MSG_CLOSED = "Connection closed"
 
 
+# noinspection PyBroadException
 class WebSocket(object):
     """
     Base class for supporting websocket operations.
@@ -77,6 +78,7 @@ class WebSocket(object):
 
             raise
 
+    # noinspection PyMethodMayBeStatic
     def _encode_bytes(self, text):
         """
         :returns: The utf-8 byte string equivalent of `text`.
@@ -87,6 +89,7 @@ class WebSocket(object):
 
         return text.encode("utf-8")
 
+    # noinspection PyMethodMayBeStatic
     def _is_valid_close_code(self, code):
         """
         :returns: Whether the returned close code is a valid hybi return code.
@@ -115,6 +118,7 @@ class WebSocket(object):
             return self.handler.server.application.current_app
         else:
             # For backwards compatibility reasons
+            # noinspection PyRedundantParentheses
             class MockApp():
                 def on_close(self, *args):
                     pass
@@ -161,7 +165,7 @@ class WebSocket(object):
         :param payload: The bytestring payload associated with the close frame.
         """
         if not payload:
-            self.close(1000, None)
+            self.close(1000, b"")
 
             return
 
@@ -184,6 +188,7 @@ class WebSocket(object):
 
         self.close(code, payload)
 
+    # noinspection PyUnusedLocal,PyUnusedLocal
     def handle_ping(self, header, payload):
         self.send_frame(payload, self.OPCODE_PONG)
 
